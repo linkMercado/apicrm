@@ -27,10 +27,11 @@ As respostas são sempre JSON com as informações:
     • data	=> array com as entidades solicitadas ou com o ID da entidade criada
 
 
-Alguns exemplos:
+## Alguns exemplos:
 Lista todos os contatos:
+```http
 GET http://internalapi.linkmercado.com.br/crm/contacts
-
+```
 
 Lista todos os contatos com raul no nome:
 GET http://internalapi.linkmercado.com.br/crm/contacts?name=raul
