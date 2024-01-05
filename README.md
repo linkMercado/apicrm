@@ -41,7 +41,7 @@ GET http://internalapi.linkmercado.com.br/crm/contacts?name=raul
 Lista o contato com o ID=…:
 ```http
 GET http://internalapi.linkmercado.com.br/crm/contacts?id=1068f1d8-578e-b861-1d13-6566a07a9e1f
-```http
+```
 Resposta:
 ```json
 {
