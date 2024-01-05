@@ -7,7 +7,7 @@ from lm_packages import Log as logging
 from lm_packages import MailBox
 from lm_packages.Extras import DefaultConv
 from lm_packages import AppControl
-from lm_packages    import SuiteCRM
+from lm_packages import SuiteCRM
 
 from functools import wraps
 from datetime import datetime
@@ -83,7 +83,6 @@ def app_crm(module):
             resp = {'status': 'ERRO', 'msg': f'método {request.method} não suportado' }
             resp_status = 500
     return Response(json.dumps(resp, default=DefaultConv), mimetype='application/json', status=resp_status) 
-
 
 
 @app.route('/_sysinfo', methods=['GET'])
