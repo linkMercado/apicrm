@@ -4,12 +4,17 @@
 http://internalapi.linkmercado.com.br/crm
 
 ## entradas:
+- Bullet list
+    - 1
+    - 2
+    - 3
     • /accounts	=> para Contas
     • /leads		=> para Leads
     • /opportunities	=> para Oportunidades
     • /contacts	=> para Contatos
 
 ## métodos:
+- Bullet list
     • GET		=> retorna a lista da 'entidade'
     • POST		=> cria a 'entidade'
     • PUT		=> atualiza a 'entidade'
