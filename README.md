@@ -34,12 +34,16 @@ GET http://internalapi.linkmercado.com.br/crm/contacts
 ```
 
 Lista todos os contatos com raul no nome:
+```http
 GET http://internalapi.linkmercado.com.br/crm/contacts?name=raul
-
+```
 
 Lista o contato com o ID=…:
+```http
 GET http://internalapi.linkmercado.com.br/crm/contacts?id=1068f1d8-578e-b861-1d13-6566a07a9e1f
+```http
 Resposta:
+```json
 {
     "data": [
         {
@@ -167,29 +171,37 @@ Resposta:
     ],
     "status": "OK"
 }
-
+```
 
 Cria contato:
+```http
 POST http://internalapi.linkmercado.com.br/crm/contacts
+```
 Body:
+```json
 {
 "first_name":"Guiiiillllherme", 
 "last_name":"Souzzzzzzzzzzzzzzza", 
 "phone_work":"2122662222", 
 "phone_mobile":"21989998999"
 }
+```
 Resposta:
+```json
 {
     "data": {
         "id": "3a73dfe8-532b-539f-ee6b-65973538b832"
     },
     "status": "OK"
 }
-
+```
 
 Atualiza o contato com ID=...:
+```http
 PUT http://internalapi.linkmercado.com.br/crm/contacts
-Body: 
+```
+Body:
+```json
 {
  "id": "3a73dfe8-532b-539f-ee6b-65973538b832",
 "first_name":"Guiiiiiillllhermeeeeeeeeeeeeeeeeeeeeeeeeeeeee", 
@@ -197,22 +209,30 @@ Body:
 "phone_work":"2122662222", 
 "phone_mobile":"21989998999"
 }
+```
 Resposta:
+```json
 {
     "data": {
         "id": "3a73dfe8-532b-539f-ee6b-65973538b832"
     },
     "status": "OK"
 }
-
+```
 
 Deleta o contato com ID=…:
+```http
 DELETE http://internalapi.linkmercado.com.br/crm/contacts
+```
 Body:
+```json
 {
  "id": "3a73dfe8-532b-539f-ee6b-65973538b832",
 }
+```
 Resposta:
+```json
 {
     "status": "OK"
 }
+```
