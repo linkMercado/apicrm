@@ -1,7 +1,9 @@
 # SUITE CRM – API -
 
 ## endpoint:
+```http
 http://internalapi.linkmercado.com.br/crm
+```
 
 ## entradas:
 - /accounts	=> para Contas
@@ -10,21 +12,21 @@ http://internalapi.linkmercado.com.br/crm
 - /contacts	=> para Contatos
 
 ## métodos:
-- GET		=> retorna a lista da 'entidade'
-- POST		=> cria a 'entidade'
-- PUT		=> atualiza a 'entidade'
-- DELETE	=> deleta a 'entidade'
+- **GET**		=> retorna a lista da 'entidade'
+- **POST**		=> cria a 'entidade'
+- **PUT**		=> atualiza a 'entidade'
+- **DELETE**	=> deleta a 'entidade'
 
-O método GET aceita parâmetros para restringir o resultado da pesquisa
+O método **GET** aceita parâmetros para restringir o resultado da pesquisa
 
-Nas chamadas usando os métodos POST e PUT e DELETE, os parâ­metros ficam no body e em formato JSON e são iguais aos campos do SuiteCRM.
+Nas chamadas usando os métodos **POST** e **PUT** e **DELETE**, os parâ­metros ficam no body e em formato JSON e são iguais aos campos do SuiteCRM.
 
-Nas chamadas usando os métodos PUT e DELETE, o parâmetro id é obrigatório.
+Nas chamadas usando os métodos **PUT** e **DELETE**, o parâmetro id é obrigatório.
 
 As respostas são sempre JSON com as informações:
-    • status	=> "OK" ou "ERRO" (sempre presente na resposta)
-    • msg	=> "mensagem de erro" (presença somente quando o status = ERRO)
-    • data	=> array com as entidades solicitadas ou com o ID da entidade criada
+- status	=> "OK" ou "ERRO" (sempre presente na resposta)
+- msg	=> "mensagem de erro" (presença somente quando o status = ERRO)
+- data	=> array com as entidades solicitadas ou com o ID da entidade criada
 
 
 ## Alguns exemplos:
