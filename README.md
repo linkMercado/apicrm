@@ -1,14 +1,15 @@
-SUITE CRM – API -
+# SUITE CRM – API -
 
-endpoint: http://internalapi.linkmercado.com.br/crm
+## endpoint:
+http://internalapi.linkmercado.com.br/crm
 
-entradas:
+## entradas:
     • /accounts	=> para Contas
     • /leads		=> para Leads
     • /opportunities	=> para Oportunidades
     • /contacts	=> para Contatos
 
-métodos:
+## métodos:
     • GET		=> retorna a lista da 'entidade'
     • POST		=> cria a 'entidade'
     • PUT		=> atualiza a 'entidade'
