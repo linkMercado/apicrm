@@ -93,6 +93,7 @@ def sys_info():
                                 "Python": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
                                 "alive": datetime.now().strftime("%Y-%m-%d %H: %M: %S"),
                                 "since": webstart.strftime("%Y-%m-%d %H: %M: %S"),
+                                "CRM": SUITECRM.Status()
                         }, default=DefaultConv
                     ), 
                     mimetype='application/json'
