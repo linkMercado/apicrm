@@ -5,6 +5,7 @@ import sys
 import config
 from lm_packages import Log as logging
 from lm_packages import MailBox
+from lm_packages import MySQLPool as MySQLPool
 from lm_packages.Extras import DefaultConv
 from lm_packages import AppControl
 from lm_packages import SuiteCRM
@@ -16,8 +17,14 @@ from flask import Flask, json, request, Response
 
 LOGGER = logging.setup_custom_logger(**config.LogConfig)
 MAILBOX = MailBox.MailBoxLM(LOGGER)
+MYSQLPOOL = MySQLPool.MySQLDBPool(LOGGER, **config.DbConfig)
 APPCONTROL = AppControl.AppControl(LOGGER, config.APPNAME, port=8904)
-SUITECRM = SuiteCRM.SuiteCRM(LOGGER)
+SUITECRM = SuiteCRM
+
+from controllers import ctl_sync
+
+from dal import dal_crm
+from dal import dal_lm
 
 LOGGER.info("inicio")
 
@@ -43,45 +50,51 @@ def app_crm(module):
     else:
         args = request.get_json()
 
-    critica = SUITECRM.critica_parametros(module, request.method, args)
-    if critica:
-        resp = {'status': 'ERRO', 'msg': critica }
-        resp_status = 400
-    else:    
-        resp_status = 200
-        if request.method == 'GET':
-            r = SUITECRM.GetData(module, filtro=args)
-            if r:
-                resp = {'status': 'OK', 'data': r }
-            else:
-                resp = {'status': 'ERRO', 'msg': 'Informação não encontrada' }
-                resp_status = 404
-        elif request.method == 'POST':
-            r = SUITECRM.PostData(module, parametros=args)
-            _id = r.get('data',{}).get('saveRecord',{}).get('record',{}).get("_id") if r else None
-            if _id:
-                resp = {'status': 'OK', 'data': {'id': _id} }
-                resp_status = 201
-            else:
-                resp = {'status': 'ERRO', 'msg': 'ERRO !' }
-                resp_status = 400
-        elif request.method == 'PUT':
-            r = SUITECRM.PutData(module, parametros=args)
-            _id = r.get('data',{}).get('saveRecord',{}).get('record',{}).get("_id") if r else None
-            if _id:
-                resp = {'status': 'OK', 'data': {'id': _id} }
-            else:
-                resp = {'status': 'ERRO', 'msg': 'ERRO !' }
-                resp_status = 400
-        elif request.method == 'DELETE':
-            if SUITECRM.DeleteData(module, parametros=args):
-                resp = {'status': 'OK'}
-            else:
-                resp = {'status': 'ERRO', 'msg': 'ERRO !' }
-                resp_status = 400
+    resp_status = 200
+    if request.method == 'GET':
+        s, d = dal_crm.Get(module, filtro=args)
+        if s:
+            resp = {'status': 'OK', 'data': d.get('data') }
         else:
-            resp = {'status': 'ERRO', 'msg': f'método {request.method} não suportado' }
-            resp_status = 500
+            resp = {'status': 'ERRO', 'data': d.get('msg') }
+    elif request.method == 'POST':
+        s, d = dal_crm.Post(module, entity_data=args)
+        if s:
+            resp = {'status': 'OK', 'data': d.get('data') }
+        else:
+            resp = {'status': 'ERRO', 'msg': d.get('msg') }
+    elif request.method == 'PUT':
+        s, d = dal_crm.Put(module, entity_data=args)
+        if s:
+            resp = {'status': 'OK', 'data': d.get('data') }
+        else:
+            resp = {'status': 'ERRO', 'msg': d.get('msg') }
+    elif request.method == 'DELETE':
+        s, d = dal_crm.Delete(module, entity_data=args)
+        if s:
+            resp = {'status': 'OK'}
+        else:
+            resp = {'status': 'ERRO', 'msg': d.get('msg') }
+    else:
+        resp = {'status': 'ERRO', 'msg': f'método {request.method} não suportado' }
+        resp_status = 500
+    return Response(json.dumps(resp, default=DefaultConv), mimetype='application/json', status=resp_status) 
+
+@app.route('/crm/sync/account', methods=['GET', 'POST', 'PUT'])
+@logar
+def app_sync():
+    if request.method == 'GET':
+        args = request.args
+    else:
+        args = request.get_json()
+    buid = args['buid']
+    if buid:
+        r = ctl_sync.sync_account(buid)
+        resp = {'status': 'OK' if r else 'ERRO' }
+        resp_status = 200
+    else:
+        resp = {'status': 'ERRO', 'msg': 'BU id não informado [buid]' }
+        resp_status = 400
     return Response(json.dumps(resp, default=DefaultConv), mimetype='application/json', status=resp_status) 
 
 
@@ -93,7 +106,8 @@ def sys_info():
                                 "Python": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
                                 "alive": datetime.now().strftime("%Y-%m-%d %H: %M: %S"),
                                 "since": webstart.strftime("%Y-%m-%d %H: %M: %S"),
-                                "CRM": SUITECRM.Status()
+                                'LM': dal_lm.getPoolInfo(), 
+                                # "CRM": SUITECRM.Status()
                         }, default=DefaultConv
                     ), 
                     mimetype='application/json'
