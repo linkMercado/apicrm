@@ -14,5 +14,5 @@ DbConfig = {
         , "database": "linkmercado"
         , "pool_size": 1
         , "max_pool_size": 6
-        , "pool_name": "Hosting-LMPool"
+        , "pool_name": "CRM-LMPool"
 }

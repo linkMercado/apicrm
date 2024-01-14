@@ -38,7 +38,7 @@ def Put(module:str, entity_data:dict) -> tuple[bool, dict]:
         return True, {'data': {'id':_id} }
     return False, { 'msg':'ERRO !' }
 
-def Get(module:str, filtro:dict=None) -> tuple[bool, dict]:
+def Get(module:str, filtro:dict=dict()) -> tuple[bool, dict]:
     CRM = SuiteCRM.SuiteCRM(logger)    
     critica = CRM.critica_parametros(module, 'GET', filtro)
     if critica:

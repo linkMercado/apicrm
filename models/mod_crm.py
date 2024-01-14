@@ -20,12 +20,16 @@ class Account(object):
         return self.__dict__
 
     def __init__(self, budata:dict):
-            self.id = budata.get('suite_id')
+            _suite_id = budata.get('suite_id')
+            if _suite_id: 
+                self.id = _suite_id
+            else:
+                self.created_by = default_user_id
+            self.modified_user_id = default_user_id
+
             self.bu_id_c = budata.get('id')
             self.id_conta_lm_c = budata.get('account_id')
             self.id_cliente_c = budata.get('id_cliente')
-            self.modified_user_id = default_user_id
-            self.created_by = default_user_id
 
             if budata.get('corporate_name'): self.name = budata.get('corporate_name')
             if budata.get('nome_fantasia'): self.nome_fantasia_c = budata.get('nome_fantasia')
@@ -36,27 +40,28 @@ class Account(object):
             # assigned_user_name: user_name do colaborador
 
             _endereco = endereco(budata.get('street_type'), budata.get('street'), budata.get('house_number'), budata.get('additional_address'))
-            if _endereco: 
+            if _endereco:
                 self.billing_address_street = _endereco
+                if budata.get('state'): self.billing_address_country = "Brasil"
+                if budata.get('state'): self.billing_address_state = budata.get('state').upper()
                 if budata.get('city'): self.billing_address_city = budata.get('city')
-                if budata.get('state'): self.billing_address_state = budata.get('state')
                 if budata.get('zipcode'): self.billing_address_postalcode = budata.get('zipcode')
                 self.shipping_address_street = _endereco
+                if budata.get('state'): self.shipping_address_country = "Brasil"
+                if budata.get('state'): self.shipping_address_state = budata.get('state').upper()
                 if budata.get('city'): self.shipping_address_city = budata.get('city')
-                if budata.get('state'): self.shipping_address_state = budata.get('state')
                 if budata.get('zipcode'): self.shipping_address_postalcode = budata.get('zipcode')
-            
+
             if budata.get('latitude'): self.geo_lat_c = budata.get('latitude')
             if budata.get('longitude'): self.geo_lng_c = budata.get('longitude')
 
-
             if budata.get('facebook'): self.facebook_c = budata.get('facebook')
             if budata.get('instagram'): self.instagram_c = budata.get('instagram')
-            if budata.get('website'): self.website = budata.get('website')
+            if budata.get('website'): self.website = f"https://{budata.get('website').replace('http://','').replace('https://','')}"
 
             if budata.get('atividade_principal'): self.atividade_principal_c = budata.get('atividade_principal')
 
-            phones = str(budata.get('phones','')).split('|')
+            phones = budata.get('phones','').decode().split('|')
             if phones:
                 _phone_office = ''
                 _phone_alternate = '' 
@@ -77,18 +82,15 @@ class Account(object):
             if len(emails) > 0:
                 self.email_address = emails[0]
 
-            colaboradores = budata.get('colaboradores')
-            if colaboradores:
-                colab = ', '.join(colaboradores.split('|'))
-                self.employees = colab
+            # colaboradores = budata.get('colaboradores')
+            # if colaboradores:
+            #    colab = ', '.join(colaboradores.split('|'))
+            #    self.employees = colab
 
             """
-            employees: colaboradores
-
                    # "date_modified":
                     # "assigned_user_id":"", 
                     # "assigned_user_name":{"user_name":"","id":""},
-                    # "phone_alternate":"",
                     # "email": email,
                     # "email_opt_out":"",
                     # "invalid_email":"",

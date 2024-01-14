@@ -12,7 +12,7 @@ from lm_packages import SuiteCRM
 
 from functools import wraps
 from datetime import datetime
-from flask import Flask, json, request, Response
+from flask import Flask, json, request, Response, jsonify
 
 
 LOGGER = logging.setup_custom_logger(**config.LogConfig)
