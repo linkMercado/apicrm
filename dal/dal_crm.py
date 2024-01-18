@@ -7,7 +7,6 @@ from apicrm import LOGGER as logger
 from apicrm import SUITECRM as SuiteCRM 
 
 
-
 def Delete(module:str, entity_data:dict) -> tuple[bool, dict]:
     CRM = SuiteCRM.SuiteCRM(logger)    
     critica = CRM.critica_parametros(module, 'DELETE', entity_data)
@@ -15,6 +14,7 @@ def Delete(module:str, entity_data:dict) -> tuple[bool, dict]:
         return False, { 'msg': critica }
     d = CRM.DeleteData(module, parametros=entity_data)
     return d, { 'msg': None } if d else { 'msg': 'Erro' }
+
 
 def Post(module:str, entity_data:dict) -> tuple[bool, dict]:
     CRM = SuiteCRM.SuiteCRM(logger)    
@@ -27,6 +27,7 @@ def Post(module:str, entity_data:dict) -> tuple[bool, dict]:
         return True, {'data': {'id':_id} }
     return False, { 'msg':'ERRO !' }
 
+
 def Put(module:str, entity_data:dict) -> tuple[bool, dict]:
     CRM = SuiteCRM.SuiteCRM(logger)    
     critica = CRM.critica_parametros(module, 'PUT', entity_data)
@@ -37,6 +38,7 @@ def Put(module:str, entity_data:dict) -> tuple[bool, dict]:
     if _id:
         return True, {'data': {'id':_id} }
     return False, { 'msg':'ERRO !' }
+
 
 def Get(module:str, filtro:dict=dict()) -> tuple[bool, dict]:
     CRM = SuiteCRM.SuiteCRM(logger)    

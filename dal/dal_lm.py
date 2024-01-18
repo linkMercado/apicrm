@@ -62,7 +62,15 @@ def GetBU(buid:str) -> dict:
                     ON u.id = am.id                    
                 WHERE bu.id = '{buid}'"""
         respBU = mysql_pool.execute(cmd, cursor_args={"buffered": True, "dictionary": True}, commit=False)
-        return  respBU[0] if respBU and len(respBU) > 0 and respBU[0].get('id') else None
+        return respBU[0] if respBU and len(respBU) > 0 and respBU[0].get('id') else None
+    return None
+
+
+def GetUser(userid:str):
+    if userid:
+        cmd = f"SELECT * from linkmercado.backoffice_users where id = '{userid}'"
+        respUser = mysql_pool.execute(cmd, cursor_args={"buffered": True, "dictionary": True}, commit=False)
+        return respUser[0] if respUser and len(respUser) > 0 and respUser[0].get('id') else None
     return None
 
 

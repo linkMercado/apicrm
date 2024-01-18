@@ -87,9 +87,10 @@ def app_sync():
         args = request.args
     else:
         args = request.get_json()
-    buid = args['buid']
+    buid = args.get('buid')
+    userid = args.get('userid')
     if buid:
-        r = ctl_sync.sync_account(buid)
+        r = ctl_sync.sync_account(buid, userid)
         resp = {'status': 'OK' if r else 'ERRO' }
         resp_status = 200
     else:
