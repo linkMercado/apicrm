@@ -2,8 +2,6 @@
 # -*- coding: utf-8 -*-
 #
 
-
-from datetime import date
 from apicrm import LOGGER as logger
 from apicrm import MYSQLPOOL as mysql_pool
 
@@ -75,7 +73,20 @@ def GetUser(userid:str):
 
 
 def PutSuiteID(buid:str, suiteid:str) -> bool:
+    """"Atualiza o SuiteId e troca a company para LM
+
+    Keyword arguments:
+    buid    -- código da BU
+    suiteid -- código da Conta no SuiteCRM
+    Return: bool indicando se conseguiu ou não fazer a atualização
+    """
+
     if buid and suiteid:
-        cmd = f"UPDATE linkmercado.core_business_units SET suite_id = '{suiteid}' WHERE id = '{buid}'"
+        cmd = f"""UPDATE linkmercado.core_business_units bu
+                  JOIN linkmercado.core_accounts ac
+                    ON ac.id = bu.account_id
+                  SET bu.suite_id = '{suiteid}', ac.company_id = 3
+                  WHERE bu.id = '{buid}'"""
         resp = mysql_pool.execute(cmd, cursor_args={"buffered": True, "dictionary": True}, commit=True, lastInserted=True)
-    return True if resp.get('rowcount', None) else False
+        return True if resp.get('rowcount') else False
+    return False
