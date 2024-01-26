@@ -90,3 +90,25 @@ def PutSuiteID(buid:str, suiteid:str) -> bool:
         resp = mysql_pool.execute(cmd, cursor_args={"buffered": True, "dictionary": True}, commit=True, lastInserted=True)
         return True if resp.get('rowcount') else False
     return False
+
+
+def GetContatos():
+    cmd = f"""
+            SELECT DISTINCT bu.suite_id, cu.name, cu.email, cu.phone, cu.mobile_phone, cu.document
+            FROM linkmercado.core_business_units bu
+            JOIN linkmercado.core_accounts ac
+                ON ac.id = bu.account_id
+            JOIN linkmercado.core_permissions p
+                ON p.account_id = ac.id
+            JOIN linkmercado.core_users cu
+                ON cu.id = p.user_id
+            WHERE bu.suite_id IS NOT NULL
+                AND cu.sessions_counted > 0 AND cu.`status` = 0
+                AND cu.email NOT IN ('marcela.o.peralta@gmail.com', 'fegahardo@gmail.com', 'felipe.simoes.g@hotmail.com')
+                AND cu.email NOT like '%@telelistas.net'
+                AND cu.email NOT like '%@linkmercado.com.br'
+            ORDER BY cu.name
+        """
+    respContato = mysql_pool.execute(cmd, cursor_args={"buffered": True, "dictionary": True}, commit=False)
+    return respContato
+

@@ -1,4 +1,5 @@
 ../packages/dist/lm_packages-1.5.4-py3-none-any.whl
 Flask
+flask-cors
 requests
 uwsgi
