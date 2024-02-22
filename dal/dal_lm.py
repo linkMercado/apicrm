@@ -31,7 +31,7 @@ def GetBU(buid:str) -> dict:
                 , SUBSTRING_INDEX(fk.fk,'_',1) id_cliente
                 , GROUP_CONCAT( CONCAT(ph.phone_type_id,'-',ph.area_code,'-',ph.number)  ORDER BY ph.sort_order SEPARATOR '|' ) phones
                 , GROUP_CONCAT( em.address order BY  em.id  SEPARATOR '|') emails
-                , GROUP_CONCAT( u.name SEPARATOR '|') colaboradores
+                , GROUP_CONCAT( u.email SEPARATOR '|') colaboradores
                 FROM linkmercado.core_business_units bu
                 JOIN linkmercado.core_addresses ad
                     ON ad.business_unit_id = bu.id
@@ -54,10 +54,10 @@ def GetBU(buid:str) -> dict:
                     AND ph.publishable = 1
                 LEFT OUTER JOIN linkmercado.core_emails em
                     ON em.business_info_id = bi.id
-                left OUTER join backoffice_account_managers am
+                left OUTER join linkmercado.backoffice_account_managers am
                     ON am.account_id = bu.account_id
                 left outer JOIN linkmercado.backoffice_users u
-                    ON u.id = am.id                    
+                    ON u.id = am.user_id
                 WHERE bu.id = '{buid}'"""
         respBU = mysql_pool.execute(cmd, cursor_args={"buffered": True, "dictionary": True}, commit=False)
         return respBU[0] if respBU and len(respBU) > 0 and respBU[0].get('id') else None

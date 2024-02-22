@@ -5,17 +5,18 @@ from models import mod_crm
 from dal import dal_lm
 from dal import dal_crm
 
-def sync_account(buid:str, userid:str=None):
+
+def sync_account(buid:str, userid:str=None) -> bool:
     budata = dal_lm.GetBU(buid)
     if budata:
         suite_id = budata.get('suite_id')
         entity_data = mod_crm.Account.fromBO(budata).__dict__
-        if suite_id:
-            # atualizar
+        if suite_id: 
+            # se tem suite_id, atualiza !
             s, r = dal_crm.Put("accounts", entity_data=entity_data)
             return s
-        else:
-            # criar
+        elif budata.get('status') == 0:
+            # se não tem suite_id e a BU está ativa, cria !
             if userid:
                 user = dal_lm.GetUser(userid)
                 s, u = dal_crm.Get('users', {'email': user['email']})
@@ -30,9 +31,12 @@ def sync_account(buid:str, userid:str=None):
                 return True
             logger.critical(f"Erro ao criar Account no SuiteCRM BU:{buid}")
             return False
+        else:
+            # nada a fazer
+            return True
     logger.debug(f"BU id {buid} não encontrada")        
     return False
-
+    
 
 def sync_bo():
     s, accounts = dal_crm.Get("accounts")
@@ -77,8 +81,10 @@ def sync_bo():
             ,"instagram_c":""
             ,"date_entered":"",
             "date_modified":""
-{"operationName":"createProcess","variables":{"input":{"type":"record-select","options":{"action":"record-select","module":"accounts","id":"b96c4f5b-3320-b071-6a90-65a87ed0463c","payload":{"baseModule":"accounts","baseRecordId":"b96c4f5b-3320-b071-6a90-65a87ed0463c","linkField":"contacts","relateModule":"contacts","relateRecordIds":["101bf212-dd05-5f60-d2b2-65a1d8252cca"]}}}},"query":"mutation createProcess($input: createProcessInput!) {\n  createProcess(input: $input) {\n    process {\n      _id\n      status\n      async\n      type\n      messages\n      data\n      __typename\n    }\n    clientMutationId\n    __typename\n  }\n}"}
-"""
+            {"operationName":"createProcess","variables":{"input":{"type":"record-select","options":{"action":"record-select","module":"accounts","id":"b96c4f5b-3320-b071-6a90-65a87ed0463c","payload":{"baseModule":"accounts","baseRecordId":"b96c4f5b-3320-b071-6a90-65a87ed0463c","linkField":"contacts","relateModule":"contacts","relateRecordIds":["101bf212-dd05-5f60-d2b2-65a1d8252cca"]}}}},"query":"mutation createProcess($input: createProcessInput!) {\n  createProcess(input: $input) {\n    process {\n      _id\n      status\n      async\n      type\n      messages\n      data\n      __typename\n    }\n    clientMutationId\n    __typename\n  }\n}"}
+            """
+
+
 def sync_contatos():
     bo_contatos = dal_lm.GetContatos()
     for contato in bo_contatos:

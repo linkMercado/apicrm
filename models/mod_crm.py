@@ -6,7 +6,7 @@ default_lead_id = "277d152e-1358-434b-8d0e-65a199598290",
 
 
 
-class Account(object):
+class   Account(object):
     def _asdict(self):
         return self.__dict__
 
@@ -35,6 +35,7 @@ class Account(object):
         else:
             cls.created_by = default_user_id
         cls.modified_user_id = default_user_id
+        cls.status_c = 'Ativo' if budata.get('status') == 0 else 'Inativo'
 
         if budata.get('id'): cls.bu_id_c = budata.get('id')
         if budata.get('account_id'): cls.id_conta_lm_c = budata.get('account_id')
