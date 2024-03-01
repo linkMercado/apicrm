@@ -6,7 +6,7 @@ default_lead_id = "277d152e-1358-434b-8d0e-65a199598290",
 
 
 
-class   Account(object):
+class Account(object):
     def _asdict(self):
         return self.__dict__
 
@@ -125,4 +125,30 @@ class Lead(object):
             cls.first_name = _nome[0]
         cls.description = dudaform['assunto']
         cls.date_entered = dudaform['event_date']
+        return cls
+
+
+
+class Contact(object):
+    def _asdict(self):
+        return self.__dict__
+
+    def __init__(self):
+        pass
+
+    @classmethod
+    def fromBO(cls, bodata:dict):    
+        cls = Contact()
+        names = bodata['name'].split(' ') if bodata['name'] else ['sem primeiro nome', 'sem último nome']
+        cls.first_name = names[0]
+        if len(names) > 1:
+            cls.last_name = ' '.join(names[1:])
+        if bodata['email']:
+            cls.email = bodata['email']
+        if bodata['document']:
+            cls.cpf_c = bodata['document']
+        if bodata['phone']:
+            cls.phone_work = bodata['phone']
+        if bodata['mobile_phone']:
+            cls.phone_mobile= bodata['mobile_phone']
         return cls

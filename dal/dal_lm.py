@@ -71,6 +71,22 @@ def GetUser(userid:str):
         return respUser[0] if respUser and len(respUser) > 0 and respUser[0].get('id') else None
     return None
 
+def GetAutorizadores(buid:str):
+    if buid:
+        cmd = f"""
+                SELECT acc.id, u.name, u.email, u.document, u.phone, u.mobile_phone, p.role principal	
+                FROM linkmercado.core_business_units bu
+                JOIN linkmercado.core_accounts acc
+                    ON acc.id = bu.account_id
+                JOIN linkmercado.core_permissions p
+                    ON p.account_id = acc.id
+                JOIN linkmercado.core_users u
+                    ON u.id = p.user_id
+                WHERE bu.id = {buid} AND u.status = 0
+        """
+        autorizadores = mysql_pool.execute(cmd, cursor_args={"buffered": True, "dictionary": True}, commit=False)
+        return autorizadores
+    return None
 
 def PutSuiteID(buid:str, suiteid:str) -> bool:
     """"Atualiza o SuiteId e troca a company para LM

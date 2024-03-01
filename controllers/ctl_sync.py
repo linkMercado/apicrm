@@ -1,5 +1,6 @@
 
 from apicrm import LOGGER as logger
+from apicrm import SUITECRM as SuiteCRM 
 
 from models import mod_crm
 from dal import dal_lm
@@ -7,27 +8,57 @@ from dal import dal_crm
 
 
 def sync_account(buid:str, userid:str=None) -> bool:
+    CRM = SuiteCRM.SuiteCRM(logger) 
     budata = dal_lm.GetBU(buid)
     if budata:
         suite_id = budata.get('suite_id')
         entity_data = mod_crm.Account.fromBO(budata).__dict__
         if suite_id: 
             # se tem suite_id, atualiza !
-            s, r = dal_crm.Put("accounts", entity_data=entity_data)
-            return s
+            status, _acc = dal_crm.Put(CRM, "accounts", entity_data=entity_data)
+            return True if status and _acc else False
         elif budata.get('status') == 0:
             # se não tem suite_id e a BU está ativa, cria !
             if userid:
                 user = dal_lm.GetUser(userid)
-                s, u = dal_crm.Get('users', {'email': user['email']})
-                if s and u and len(u.get('data',[])) == 1:
-                    entity_data['assigned_user_id'] = u.get('data')[0].get('id')
+                status, _user = dal_crm.Get(CRM, 'users', {'email': user['email']})
+                if _user and len(_user.get('data',[])) == 1:
+                    entity_data['assigned_user_id'] = _user.get('data')[0].get('id')
                 else:
                     logger.warning(f"User não encontrado no SuiteCRM u:{user}")
-            s, r = dal_crm.Post("accounts", entity_data=entity_data)
-            if s:
-                suite_id = r.get('data',{}).get('id')
+            status, _acc = dal_crm.Post(CRM, "accounts", entity_data=entity_data)
+            if status and _acc:
+                suite_id = _acc.get('data',{}).get('id')
                 dal_lm.PutSuiteID(buid, suite_id)
+                # associa os autorizadores(contatos) à conta criada
+                autorizadores = dal_lm.GetAutorizadores(buid)
+                if autorizadores:
+                    lista_contatos = ""
+                    for autorizador in autorizadores:
+                        # verifica se autorizador está no CRM
+                        filtro = {'name': autorizador['name']}
+                        if autorizador['email']:
+                            filtro['email'] = autorizador['email']
+                        if autorizador['document']:
+                            filtro['cpf_c'] = autorizador['document']
+                        if autorizador['phone']:
+                            filtro['phone_work'] = autorizador['phone']
+                        if autorizador['mobile_phone']:
+                            filtro['phone_mobile'] = autorizador['mobile_phone']
+                        status, contato = dal_crm.Get(CRM, "contacts", filtro)
+                        if not status:
+                            logger.debug("Erro critico ao pegar o contato")
+                            continue
+                        if contato and len(contato.get('data',[])) == 0:
+                            contato = dal_crm.Cria_contato(CRM, mod_crm.Contact().fromBO(autorizador).__dict__)
+                            contato_id = contato['data']['saveRecord']['record']['_id']
+                        else:
+                            contato_id = contato['data'][0]['id']                    
+                        lista_contatos += f"{contato_id},"
+                    # associa os contatos à conta
+                    r = dal_crm.Associa_contatos(CRM, suite_id, lista_contatos[:-1])
+                    if not r:
+                        logger.debug("Associação com problemas")
                 return True
             logger.critical(f"Erro ao criar Account no SuiteCRM BU:{buid}")
             return False
@@ -39,7 +70,8 @@ def sync_account(buid:str, userid:str=None) -> bool:
     
 
 def sync_bo():
-    s, accounts = dal_crm.Get("accounts")
+    CRM = SuiteCRM.SuiteCRM(logger) 
+    s, accounts = dal_crm.Get(CRM, "accounts")
     for conta in accounts.get('data',[]):
         buid = conta.get('bu_id_c')
         if buid:
@@ -86,10 +118,11 @@ def sync_bo():
 
 
 def sync_contatos():
+    CRM = SuiteCRM.SuiteCRM(logger) 
     bo_contatos = dal_lm.GetContatos()
     for contato in bo_contatos:
-        _, k1 = dal_crm.Get("contacts", filtro={'email':contato['email']}) if contato['email'] else False, None
-        _, k2 = dal_crm.Get("contacts", filtro={'cpf_c':contato['document']}) if contato['document'] else False, None
+        _, k1 = dal_crm.Get(CRM, "contacts", filtro={'email':contato['email']}) if contato['email'] else False, None
+        _, k2 = dal_crm.Get(CRM, "contacts", filtro={'cpf_c':contato['document']}) if contato['document'] else False, None
         #_, k3 = dal_crm.Get("accounts", filtro={'mobile_phone':contato['mobile_phone']}) if contato['mobile_phone'] else False, None
         #_, k4 = dal_crm.Get("accounts", filtro={'phone_work':contato['phone']}) if contato['phone'] else False, None
         #_, k5 = dal_crm.Get("accounts", filtro={'phone_fax':contato['mobile_phone']}) if contato['mobile_phone'] else False, None
@@ -113,10 +146,9 @@ def sync_contatos():
         #        or (k6 and len(k6.get('data',[])) > 0) \
         #        or (k7 and len(k7.get('data',[])) > 0) \
             ):
-            dal_crm.Post("contacts", entity_data=entity_data)
+            dal_crm.Post(CRM, "contacts", entity_data=entity_data)
 
 # sync_bo()
-
 # jb
 # sync_account(19825816) # bysdev
 
