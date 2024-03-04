@@ -57,28 +57,29 @@ def app_crm(module):
         args = request.args
     else:
         args = request.get_json()
-
+    
+    CRM = SuiteCRM.SuiteCRM(LOGGER) 
     resp_status = 200
     if request.method == 'GET':
-        s, d = dal_crm.Get(module, filtro=args)
+        s, d = dal_crm.Get(CRM, module, filtro=args)
         if s:
             resp = {'status': 'OK', 'data': d.get('data') }
         else:
             resp = {'status': 'ERRO', 'data': d.get('msg') }
     elif request.method == 'POST':
-        s, d = dal_crm.Post(module, entity_data=args)
+        s, d = dal_crm.Post(CRM, module, entity_data=args)
         if s:
             resp = {'status': 'OK', 'data': d.get('data') }
         else:
             resp = {'status': 'ERRO', 'msg': d.get('msg') }
     elif request.method == 'PUT':
-        s, d = dal_crm.Put(module, entity_data=args)
+        s, d = dal_crm.Put(CRM, module, entity_data=args)
         if s:
             resp = {'status': 'OK', 'data': d.get('data') }
         else:
             resp = {'status': 'ERRO', 'msg': d.get('msg') }
     elif request.method == 'DELETE':
-        s, d = dal_crm.Delete(module, entity_data=args)
+        s, d = dal_crm.Delete(CRM, module, entity_data=args)
         if s:
             resp = {'status': 'OK'}
         else:
