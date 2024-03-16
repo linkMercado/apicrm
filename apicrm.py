@@ -105,17 +105,24 @@ def app_sync():
     else:
         args = request.get_json()
     buids = str(args.get('buid'))
+    accountid = str(args.get('accountid'))
     userid = args.get('userid')
     msg = []
     resp_status = 200
-    if buids:
-        _resp = True
-        for buid in buids.split(','):
-            r = ctl_sync.sync_account(buid, userid)
-            _resp = _resp and r
-            msg.append(f"BU:{buid} {'não' if not r else ''} sincronizada")
-        resp = {'status': 'OK' if _resp else 'ERRO', 'msg' : msg }
-        resp_status = 200 if _resp else 400
+    if buids or accountid:
+        if buids:
+            accids = dal_lm.GetAccountsIDs([buids,])
+            if accids and len(accids) == 1:
+                accountid = accids[0].get('account_id')
+            else:
+                accountid = None
+        if accountid:                
+            _resp, buids = ctl_sync.sync_BO2CRM_Account(account_id=accountid, userid=userid)
+            resp = {'status': 'OK' if _resp else 'ERRO', 'msg' : msg, 'buids' : buids }
+            resp_status = 200 if _resp else 400
+        else:
+            resp = {'status': 'ERRO', 'msg': 'Account_id id não encontrado na Base' }
+            resp_status = 400
     else:
         resp = {'status': 'ERRO', 'msg': 'BU id não informado [buid]' }
         resp_status = 400

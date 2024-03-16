@@ -1,9 +1,7 @@
 # encoding: utf-8
 # -*- coding: utf-8 -*-
 
-default_user_id = "1"
-default_lead_id = "277d152e-1358-434b-8d0e-65a199598290",
-
+API_GEN_UserID = "e53b04f5-d41d-e195-e970-65e720c0cda5"
 
 
 class Account(object):
@@ -33,8 +31,8 @@ class Account(object):
         if _suite_id: 
             cls.id = _suite_id
         else:
-            cls.created_by = default_user_id
-        cls.modified_user_id = default_user_id
+            cls.created_by = API_GEN_UserID
+        cls.modified_user_id = API_GEN_UserID
         cls.status_c = 'Ativo' if budata.get('status') == 0 else 'Inativo'
 
         if budata.get('id'): cls.bu_id_c = budata.get('id')
@@ -144,11 +142,16 @@ class Contact(object):
         if len(names) > 1:
             cls.last_name = ' '.join(names[1:])
         if bodata['email']:
-            cls.email = bodata['email']
+            cls.email_address = bodata['email']
         if bodata['document']:
             cls.cpf_c = bodata['document']
         if bodata['phone']:
             cls.phone_work = bodata['phone']
         if bodata['mobile_phone']:
             cls.phone_mobile= bodata['mobile_phone']
+        if str(bodata['principal']) == "1":
+            cls.contatoprincipal_c = 1
+            cls.tipocontato_c = ["^Autorizador^"]
+        else:
+            cls.tipocontato_c = ["^Usuariobackoffice^"]
         return cls
