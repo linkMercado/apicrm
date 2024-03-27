@@ -10,6 +10,22 @@ from dal import dal_crm
 WATSON_UserID = 'a2fc0fc9-cb48-39c3-2bb2-658b42a377d7'
 
 
+def cria_notificacao(business_unit_id:str, titulo:str, texto:str=None) -> str:
+    """
+    cria uma nota no CRM(business_unit_id:str, titulo:str, texto:str=None)
+    """
+    CRM = SuiteCRM.SuiteCRM(logger)
+
+    crm_account = CRM.GetData("accounts",{'bu_id_c': business_unit_id})
+    if crm_account:
+        crm_account_id = crm_account[0].get('id')
+        crm_nota = CRM.cria_note(parent_type="accounts", parent_id=crm_account_id, name=titulo, description=texto)
+        crm_nota_id = crm_nota.get('data',{}).get('saveRecord',{}).get('record',{}).get('_id')
+        msg = f"Nota {crm_nota_id} para a bu:{business_unit_id} criada."
+    else:
+        msg = f"Não exite conta para a bu:{business_unit_id}"    
+    return msg  
+
 def sync_BO2CRM_Account(account_id:str, userid:str=None, crm_user_id:str=None) -> tuple[dict, dict]:
     _crm_user_id = None
     if int(account_id) <= 1:
@@ -294,3 +310,5 @@ def sync_contatos():
 #r.update(sync_BO2CRM_Account('68108', crm_user_id='ad72ba17-3603-86fe-90c4-6565f5c5444b'))
 #print(r)
 #print() 
+
+# cria_notificacao(business_unit_id=719825816, titulo="Site publicado !", texto="OK")

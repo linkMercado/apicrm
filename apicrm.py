@@ -12,11 +12,9 @@ from lm_packages import SuiteCRM
 
 from functools import wraps
 from datetime import datetime
-from flask import Flask, json, request, Response
-
-from functools import update_wrapper
-
+from flask import Flask, json, request, Response, make_response 
 from flask_cors import CORS, cross_origin
+
 
 LOGGER = logging.setup_custom_logger(**config.LogConfig)
 MAILBOX = MailBox.MailBoxLM(LOGGER)
@@ -24,7 +22,7 @@ MYSQLPOOL = MySQLPool.MySQLDBPool(LOGGER, **config.DbConfig)
 APPCONTROL = AppControl.AppControl(LOGGER, config.APPNAME, port=8904)
 SUITECRM = SuiteCRM
 
-from controllers import ctl_sync
+from controllers import ctl_procs
 
 from dal import dal_crm
 from dal import dal_lm
@@ -32,9 +30,7 @@ from dal import dal_lm
 LOGGER.info("inicio")
 
 app = Flask(__name__,static_url_path='')
-app.config['SECRET_KEY'] = 'the quick brown fox jumps over the lazy   dog'
-app.config['CORS_HEADERS'] = 'Content-Type'
-cors = CORS(app, resources={r"/crm/sync/account": {"origins": "*"}})
+cors = CORS(app, resources={r"/crm/*": {"origins": "*"}})
 
 webstart = datetime.now()
 
@@ -47,6 +43,23 @@ def logar(func):
         LOGGER.debug(f"w:{request.path} [{request.method}] func:{func.__name__}")
         return resp
     return inner
+
+
+
+
+@app.route('/crm/procedure/<procedure>', methods=['GET', 'POST', 'PUT', 'DELETE'])
+@logar
+def app_procedures(procedure):
+    if request.method == 'GET':
+        args = request.args
+    else:
+        args = request.get_json()
+    if procedure == "cria_notificacao":
+        try:
+            msg = ctl_procs.cria_notificacao(**args)
+        except Exception as e:
+            msg = f"{e}"
+    return Response(msg, mimetype='application/json', status=200) 
 
 
 
@@ -65,7 +78,7 @@ def app_crm(module):
         if s:
             resp = {'status': 'OK', 'data': d.get('data') }
         else:
-            resp = {'status': 'ERRO', 'data': d.get('msg') }
+            resp = {'status': 'ERRO', 'msg': d.get('msg') }
     elif request.method == 'POST':
         s, d = dal_crm.Post(CRM, module, entity_data=args)
         if s:
@@ -91,8 +104,21 @@ def app_crm(module):
 
 
 @app.after_request
-def after_request(response: Response) -> Response:
-    response.access_control_allow_credentials = True
+def after_request_func(response: Response) -> Response:
+    origin = request.headers.get('Origin')
+    if request.method == 'OPTIONS':
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
+        response.headers.add('Access-Control-Allow-Headers', 'x-csrf-token')
+        response.headers.add('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE') # PATCH
+        if origin:
+            response.headers.add('Access-Control-Allow-Origin', origin)
+    else:
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        if origin:
+            response.headers.add('Access-Control-Allow-Origin', origin)
+
     return response
 
 
@@ -117,7 +143,7 @@ def app_sync():
             else:
                 accountid = None
         if accountid:                
-            _resp, buids = ctl_sync.sync_BO2CRM_Account(account_id=accountid, userid=userid)
+            _resp, buids = ctl_procs.sync_BO2CRM_Account(account_id=accountid, userid=userid)
             resp = {'status': 'OK' if _resp else 'ERRO', 'msg' : msg, 'buids' : buids }
             resp_status = 200 if _resp else 400
         else:
@@ -149,6 +175,7 @@ def sys_info():
 @app.route('/crm/_appinfo', methods=['GET'])
 def app_info():
     return Response(json.dumps(APPCONTROL.AppInfo(), default=DefaultConv), mimetype='application/json') 
+
 
 
 @app.route("/")
