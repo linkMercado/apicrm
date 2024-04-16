@@ -26,44 +26,50 @@ def cria_notificacao(business_unit_id:str, titulo:str, texto:str=None) -> str:
         msg = f"Não exite conta para a bu:{business_unit_id}"    
     return msg  
 
-def sync_BO2CRM_Account(account_id:str, userid:str=None, crm_user_id:str=None) -> tuple[dict, dict]:
+
+def sync_BO2CRM_Account(account_id:str, userid:str=None, crm_user_id:str=None, gerente_relacionamento:str=None) -> tuple[dict, dict]:
     _crm_user_id = None
     if int(account_id) <= 1:
         raise ValueError(f"account_id inválido: {account_id}, deve ser maior do que 1")
 
     CRM = SuiteCRM.SuiteCRM(logger)     
     respostas:dict = dict()
-    suite_ids: dict = dict()
+    suite_ids:dict = dict()
 
-    # pega a lista dos assigneds que estão no CRM para as empresas dessa conta
-    # se a conta existe no CRM, mantem o assigned_user_id
-    if crm_user_id is None:
-        crm_accounts = dal_crm.Account_Get(CRM, id=None, account_id=account_id)
-        if crm_accounts and len(crm_accounts) > 0:
-            crm_user_ids = dict()
-            for crm_account in crm_accounts:
-                assigned_id = crm_account.get('assigned_user_id')
-                if assigned_id == WATSON_UserID:
-                    crm_user_ids[assigned_id] = 0
-                else:
-                    crm_user_ids[assigned_id] = crm_user_ids.get(assigned_id,0) + 1
-            ov = -1
-            for k, v in crm_user_ids.items():
-                if v > ov:
-                    ov = v
-                    _crm_user_id = k
-        else:
-            if userid:
-                user = dal_lm.GetUser(userid)
-                crm_user = dal_crm.User_Get(CRM, email=user['email'])
-                _crm_user_id = crm_user.get('data',{}).get('saveRecord',{}).get('record',{}).get("_id") if crm_user else None
-                if not _crm_user_id:
-                    logger.critical(f"User não encontrado no SuiteCRM u:{user}")
-        crm_accounts = None
-    else:
-        _crm_user_id = crm_user_id
+    # pega a lista dos assigned_user_id que estão no CRM para as empresas dessa conta e escolhe a que mais aparece (só deveria haver 1!)
+    # resposta em _crm_user_id
+    _crm_user_id = WATSON_UserID
+    crm_accounts = dal_crm.Account_Get(CRM, id=None, account_id=account_id)
+    if crm_accounts and len(crm_accounts) > 0:
+        crm_user_ids = dict()
+        for crm_account in crm_accounts:
+            assigned_id = crm_account.get('assigned_user_id')
+            if assigned_id == WATSON_UserID:
+                crm_user_ids[assigned_id] = 0
+            else:
+                crm_user_ids[assigned_id] = crm_user_ids.get(assigned_id,0) + 1
+        ov = -1
+        for k, v in crm_user_ids.items():
+            if v > ov:
+                ov = v
+                _crm_user_id = k
 
-    # trata os Clientes associados à conta
+    # se a crm_user_id ou o userid forem informados, troca o representante 
+    if userid or crm_user_id:
+        if userid:
+            user = dal_lm.GetUser(userid)
+            crm_user = dal_crm.User_Get(CRM, email=user['email']) if user else None
+            _crm_user_id = crm_user.get('id') if crm_user else None
+            if not _crm_user_id:
+                logger.critical(f"User não encontrado no SuiteCRM u:{user}")
+        if not _crm_user_id:
+            _crm_user_id = crm_user_id
+
+    # se o _crm_user_id é vazio (não encontrou ninguém), coloca o WATSON
+    if not _crm_user_id:
+        _crm_user_id = WATSON_UserID
+
+    # trata os Clientes (Autorizadores) associados à conta
     lista_contatos = ""
     autorizadores = dal_lm.GetAutorizadores(account_id)
     if autorizadores:
@@ -72,10 +78,11 @@ def sync_BO2CRM_Account(account_id:str, userid:str=None, crm_user_id:str=None) -
             crm_contato = dal_crm.Contact_Get(CRM, name=autorizador['name'], email=autorizador['email'], document=autorizador['document'], phone=autorizador['phone'], mobile_phone=autorizador['mobile_phone'])
             # cria o contato ?
             if not crm_contato:
-                crm_contato = dal_crm.Contact_Create(CRM, mod_crm.Contact().fromBO(autorizador).__dict__)
-                contato_id = crm_contato['data']['saveRecord']['record']['_id']
+                error, crm_contato = dal_crm.Contact_Create(CRM, mod_crm.Contact().fromBO(autorizador).__dict__)
+                contato_id = crm_contato.get('id')
                 logger.info(f"Contato criado no SuiteCRM c:{autorizador}, id:{contato_id}")
             else:
+                # TODO se achou, marca como Autorizador ou UsuárioBO
                 contato_id = crm_contato[0]['id']                    
             lista_contatos += f"{contato_id},"
 
@@ -84,6 +91,8 @@ def sync_BO2CRM_Account(account_id:str, userid:str=None, crm_user_id:str=None) -
         bu_id = budata.get('id')
         account_data = mod_crm.Account.fromBO(budata).__dict__
         account_data['assigned_user_id'] = _crm_user_id
+        if gerente_relacionamento:
+            account_data['gerente_relacionamento_name'] = gerente_relacionamento
         respostas[bu_id] = ""
         suite_ids[bu_id] = suite_id
 
@@ -95,32 +104,23 @@ def sync_BO2CRM_Account(account_id:str, userid:str=None, crm_user_id:str=None) -
         # está no CRM ?
         if suite_id:
             _crmdata = dal_crm.Account_Get(CRM, id=suite_id)
-            if len(_crmdata) == 1:
-                crmdata = _crmdata[0]
-            else:
-                crmdata = None
-            # confirma !
-            if crmdata:
-                # mantém o mesmo assigned_user_id ?
-                if crm_user_id:
-                    account_data['assigned_user_id'] = crm_user_id
-                elif not userid:
-                    account_data['assigned_user_id'] = crmdata['assigned_user_id']
-
-                # se inativo CRM e BO, skip
-                if crmdata.get('status_c') == 'Inativo' and budata.get('status') != 0:
-                    respostas[bu_id] += 'Não atualizado, Inativo.'
-                    suite_ids[bu_id] = None
-                    continue
-                
-                # atualiza !
-                atualizou = dal_crm.Account_Update(CRM, account_data)
-                respostas[bu_id] += 'Atualizado.' if atualizou else 'Erro ao atualizar.'
+            if len(_crmdata) > 0:
+                for crmdata in _crmdata:
+                    account_data['assigned_user_id'] = _crm_user_id
+                    ## se inativo CRM e BO, skip
+                    #if crmdata.get('status_c') == 'Inativo' and budata.get('status') != 0:
+                    #    respostas[bu_id] += 'Não atualizado, Inativo.'
+                    #    suite_ids[bu_id] = None
+                    #    continue
+                    
+                    # atualiza !
+                    atualizou = dal_crm.Account_Update(CRM, account_data)
+                    respostas[bu_id] += 'Atualizado.' if atualizou else 'Erro ao atualizar.'
             else:
                 # estranho não achar no CRM pois tinha suite_id, marca para criar
                 suite_id = None
-                suite_ids[bu_id] = suite_id
-                account_data['id'] = suite_id
+                suite_ids[bu_id] = None
+                account_data['id'] = None
 
         # precisa criar no CRM ?    
         if not suite_id:
@@ -145,7 +145,6 @@ def sync_BO2CRM_Account(account_id:str, userid:str=None, crm_user_id:str=None) -
                 continue
 
             if suite_id:
-                suite_ids[bu_id] = suite_id
                 atualizou = dal_crm.Account_Update(CRM, account_data)
                 respostas[bu_id] += 'Atualizado.' if atualizou else 'Erro ao atualizar.'
             else:    
@@ -307,8 +306,8 @@ def sync_contatos():
 #print(w)
             
 #r = dict()
-#r.update(sync_BO2CRM_Account('68108', crm_user_id='ad72ba17-3603-86fe-90c4-6565f5c5444b'))
-#print(r)
+#x = sync_BO2CRM_Account('1778052', userid=10, gerente_relacionamento="Andre.Silveira")
+#print(x)
 #print() 
 
 # cria_notificacao(business_unit_id=719825816, titulo="Site publicado !", texto="OK")

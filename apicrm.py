@@ -45,8 +45,6 @@ def logar(func):
     return inner
 
 
-
-
 @app.route('/crm/procedure/<procedure>', methods=['GET', 'POST', 'PUT', 'DELETE'])
 @logar
 def app_procedures(procedure):
@@ -60,7 +58,6 @@ def app_procedures(procedure):
         except Exception as e:
             msg = f"{e}"
     return Response(msg, mimetype='application/json', status=200) 
-
 
 
 @app.route('/crm/<module>', methods=['GET', 'POST', 'PUT', 'DELETE'])
@@ -130,8 +127,8 @@ def app_sync():
         args = request.args
     else:
         args = request.get_json()
-    buids = str(args.get('buid'))
-    accountid = str(args.get('accountid'))
+    buids = args.get('buid')
+    accountid = args.get('accountid')
     userid = args.get('userid')
     msg = []
     resp_status = 200
@@ -156,6 +153,58 @@ def app_sync():
     return Response(json.dumps(resp, default=DefaultConv), mimetype='application/json', status=resp_status) 
 
 
+@app.route('/crm/notification', methods=['POST'])
+@cross_origin(origin='*',headers=['Content-Type','Authorization'])
+@logar
+def app_notification():
+    if request.method == 'GET':
+        args = request.args
+    else:
+        args = request.get_json()
+    idcliente = args.get('idcliente')
+    buid = args.get('buid')
+    name = args.get('nome')    
+    mensagem = args.get('mensagem')    
+    assigned_user_name = args.get('assigned')
+    crm_account_id = None
+    crm_gerente_relacionamento = None
+    CRM = SuiteCRM.SuiteCRM(LOGGER) 
+    if idcliente:
+        crm_account = dal_crm.Account_Get(CRM,id_cliente_c=idcliente)
+        if crm_account and len(crm_account) == 1:
+            crm_account_id = crm_account[0].get('id')
+            crm_gerente_relacionamento = crm_account[0].get('users_accounts_1users_ida')
+    elif buid:
+        crm_account = dal_crm.Account_Get(CRM, bu_id_c=buid)
+        if crm_account and len(crm_account) == 1:
+            crm_account_id = crm_account[0].get('id')
+    # se exiate no CRM -> ticket else task
+    if crm_account_id:                
+        _resp = CRM.cria_ticket(account_id=crm_account_id,
+                                name=name,
+                                description=mensagem,
+                                type="Register",
+                                priority="P2",
+                                assigned_user_id=crm_gerente_relacionamento,
+                                date_entered="agora"
+        )
+        resp = {'status': 'OK' if _resp else 'ERRO'}
+        resp_status = 200 if _resp else 400
+    else:
+        _resp = CRM.cria_task(  name=name,
+                                description=mensagem,
+                                assigned_user_id= "nome do gerente de relacionamento",
+                                date_entered="agora",
+                                status="Completed" "Not Started",
+                                priority="Medium",
+        )
+        resp = {'status': 'OK' if _resp else 'ERRO'}
+        resp_status = 200 if _resp else 400
+
+    LOGGER.debug(f"s:{resp_status} m:{resp}")
+    return Response(json.dumps(resp, default=DefaultConv), mimetype='application/json', status=resp_status) 
+
+
 @app.route('/_sysinfo', methods=['GET'])
 def sys_info():
     return Response(json.dumps(
@@ -175,7 +224,6 @@ def sys_info():
 @app.route('/crm/_appinfo', methods=['GET'])
 def app_info():
     return Response(json.dumps(APPCONTROL.AppInfo(), default=DefaultConv), mimetype='application/json') 
-
 
 
 @app.route("/")

@@ -42,22 +42,27 @@ def Get(CRM, module:str, filtro:dict=dict()) -> tuple[bool, dict]:
     return True, { 'data': CRM.GetData(module, filtro=filtro) }
 
 
-def Account_Get(CRM, id:str, account_id:str=None) -> dict:
+def Account_Get(CRM, id:str, account_id:str=None, buid:str=None, id_cliente:str=None) -> dict:
     filtro = dict()
     if id:
         filtro['id'] = id
     if account_id:
         filtro['id_conta_lm_c'] = account_id
+    if id_cliente:
+        filtro['id_cliente_c'] = id_cliente
+    if buid:
+        filtro['bu_id_c'] = buid
     return CRM.GetData("accounts", filtro=filtro)
 
 
-def Account_Create(CRM, account_data:dict) -> dict:
+def Account_Create(CRM, account_data:dict) -> tuple[str,dict]:
     if account_data:
-        r = CRM.PostData("accounts", parametros=account_data)
+        # r = CRM.cria_conta(*account_data)
+        error, data = CRM.PostData("accounts", parametros=account_data)
         # id = r.get('data',{}).get('saveRecord',{}).get('record',{}).get("_id") if r else None        
-        return r.get('data',{}).get('saveRecord',{}).get('record',{}).get('attributes') if r else None
+        return error, data
     else:
-        return None
+        return 'sem dados para cadastrar', None
 
 
 def Account_Update(CRM, account_data:dict) -> dict:
@@ -69,16 +74,8 @@ def Account_Update(CRM, account_data:dict) -> dict:
         return False
 
 
-def User_Get(CRM, id:str=None, email:str=None) -> dict:
-    filtro = dict()
-    if id:
-        filtro['id'] = id
-    if email:
-        filtro['email'] = email
-    if filtro:        
-        return CRM.GetData("users", filtro=filtro)
-    else:
-        return None
+def User_Get(CRM, id:str=None, username:str=None, email:str=None) -> dict:
+    return CRM.getColaborador(id=id, username=username, email=email)
 
 
 def Contact_Get(CRM, id:str=None, name:str=None, email:str=None, document:str=None, phone:str=None, mobile_phone:str=None) -> dict:
@@ -101,16 +98,25 @@ def Contact_Get(CRM, id:str=None, name:str=None, email:str=None, document:str=No
         return None
 
 
-def Contact_Create(CRM, contact_data:dict) -> dict:
+def Contact_Create(CRM, contact_data:dict) -> tuple[str,dict]:
     if contact_data:
-        r = CRM.PostData("contacts", parametros=contact_data)
-        return r
+        error, data = CRM.PostData("contacts", parametros=contact_data)
+        return error, data
     else:
-        return None
+        return 'Sim informação', None
 
 
 def Cria_contato(CRM, parametros):
     return CRM.cria_contato(**parametros)
+
+
+def Ticket_Create(CRM, ticket_data:dict) -> dict:
+    if ticket_data:
+        r = CRM.PostData("tickets", parametros=ticket_data)
+        return r.get('data',{}).get('saveRecord',{}).get('record',{}).get('attributes') if r else None
+    else:
+        return None
+
 
 
 def Associa_contatos(CRM, crm_account_id:str, crm_contact_ids:str) -> bool:
