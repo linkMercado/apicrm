@@ -17,8 +17,8 @@ def Post(CRM, module:str, entity_data:dict) -> tuple[bool, dict]:
     critica = CRM.critica_parametros(module, 'POST', entity_data)
     if critica:
         return False, { 'msg': critica }
-    r = CRM.PostData(module, parametros=entity_data)
-    _id = r.get('data',{}).get('saveRecord',{}).get('record',{}).get("_id") if r else None
+    _, r = CRM.PostData(module, parametros=entity_data)
+    _id = r.get("id") if r else None
     if _id:
         return True, {'data': {'id':_id} }
     return False, { 'msg':'ERRO !' }
@@ -28,8 +28,8 @@ def Put(CRM, module:str, entity_data:dict) -> tuple[bool, dict]:
     critica = CRM.critica_parametros(module, 'PUT', entity_data)
     if critica:
         return False, { 'msg': critica }
-    r = CRM.PutData(module, parametros=entity_data)
-    _id = r.get('data',{}).get('saveRecord',{}).get('record',{}).get("_id") if r else None
+    _, r = CRM.PutData(module, parametros=entity_data)
+    _id = r.get("id") if r else None
     if _id:
         return True, {'data': {'id':_id} }
     return False, { 'msg':'ERRO !' }
@@ -42,7 +42,7 @@ def Get(CRM, module:str, filtro:dict=dict()) -> tuple[bool, dict]:
     return True, { 'data': CRM.GetData(module, filtro=filtro) }
 
 
-def Account_Get(CRM, id:str, account_id:str=None, buid:str=None, id_cliente:str=None) -> dict:
+def Account_Get(CRM, id:str=None, account_id:str=None, buid:str=None, id_cliente:str=None, status:str=None) -> dict:
     filtro = dict()
     if id:
         filtro['id'] = id
@@ -52,6 +52,8 @@ def Account_Get(CRM, id:str, account_id:str=None, buid:str=None, id_cliente:str=
         filtro['id_cliente_c'] = id_cliente
     if buid:
         filtro['bu_id_c'] = buid
+    if status:
+        filtro['status_c'] = status
     return CRM.GetData("accounts", filtro=filtro)
 
 
@@ -67,9 +69,16 @@ def Account_Create(CRM, account_data:dict) -> tuple[str,dict]:
 
 def Account_Update(CRM, account_data:dict) -> dict:
     if account_data:
-        r = CRM.PutData("accounts", parametros=account_data)
-        id = r.get('data',{}).get('saveRecord',{}).get('record',{}).get("_id") if r else None        
+        _, data = CRM.PutData("accounts", parametros=account_data)
+        id = data.get("id") if data else None
         return True if id else False
+    else:
+        return False
+
+
+def Account_Delete(CRM, crm_id:str) -> dict:
+    if crm_id:
+        return CRM.DeleteData("accounts", parametros={'id':crm_id})
     else:
         return False
 
@@ -116,7 +125,6 @@ def Ticket_Create(CRM, ticket_data:dict) -> dict:
         return r.get('data',{}).get('saveRecord',{}).get('record',{}).get('attributes') if r else None
     else:
         return None
-
 
 
 def Associa_contatos(CRM, crm_account_id:str, crm_contact_ids:str) -> bool:

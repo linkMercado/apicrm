@@ -65,6 +65,11 @@ class Account(object):
 
         if budata.get('facebook'): cls.facebook_c = budata.get('facebook')
         if budata.get('instagram'): cls.instagram_c = budata.get('instagram')
+        if budata.get('twitter'): cls.twitter_c = budata.get('twitter')
+        if budata.get('linkedin'): cls.linkedin_c = budata.get('linkedin')
+        if budata.get('youtube'): cls.youtube_c = budata.get('youtube')
+        if budata.get('tiktok'): cls.tiktok_c = budata.get('tiktok')
+
         if budata.get('website'): cls.website = f"https://{budata.get('website').replace('http://','').replace('https://','')}"
 
         if budata.get('atividade_principal'): cls.atividade_principal_c = budata.get('atividade_principal')

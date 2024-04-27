@@ -64,32 +64,31 @@ def app_procedures(procedure):
 @logar
 def app_crm(module):
     if request.method == 'GET':
-        args = request.args
+        args = request.args.to_dict()
     else:
         args = request.get_json()
-    
-    CRM = SuiteCRM.SuiteCRM(LOGGER) 
+
     resp_status = 200
     if request.method == 'GET':
-        s, d = dal_crm.Get(CRM, module, filtro=args)
+        s, d = ctl_procs.Get(module, filtro=args)
         if s:
             resp = {'status': 'OK', 'data': d.get('data') }
         else:
             resp = {'status': 'ERRO', 'msg': d.get('msg') }
     elif request.method == 'POST':
-        s, d = dal_crm.Post(CRM, module, entity_data=args)
+        s, d = ctl_procs.Post(module, entity_data=args)
         if s:
             resp = {'status': 'OK', 'data': d.get('data') }
         else:
             resp = {'status': 'ERRO', 'msg': d.get('msg') }
     elif request.method == 'PUT':
-        s, d = dal_crm.Put(CRM, module, entity_data=args)
+        s, d = ctl_procs.Put(module, entity_data=args)
         if s:
             resp = {'status': 'OK', 'data': d.get('data') }
         else:
             resp = {'status': 'ERRO', 'msg': d.get('msg') }
     elif request.method == 'DELETE':
-        s, d = dal_crm.Delete(CRM, module, entity_data=args)
+        s, d = ctl_procs.Delete(module, entity_data=args)
         if s:
             resp = {'status': 'OK'}
         else:
@@ -130,7 +129,7 @@ def app_sync():
     buids = args.get('buid')
     accountid = args.get('accountid')
     userid = args.get('userid')
-    msg = []
+
     resp_status = 200
     if buids or accountid:
         if buids:
@@ -140,9 +139,9 @@ def app_sync():
             else:
                 accountid = None
         if accountid:                
-            _resp, buids = ctl_procs.sync_BO2CRM_Account(account_id=accountid, userid=userid)
-            resp = {'status': 'OK' if _resp else 'ERRO', 'msg' : msg, 'buids' : buids }
-            resp_status = 200 if _resp else 400
+            msg, buids = ctl_procs.sync_BO2CRM_Account(account_id=accountid, userid=userid)
+            resp = {'status': 'OK' if msg else 'ERRO', 'msg' : msg, 'buids' : buids }
+            resp_status = 200 if msg else 400
         else:
             resp = {'status': 'ERRO', 'msg': 'Account_id id não encontrado na Base' }
             resp_status = 400

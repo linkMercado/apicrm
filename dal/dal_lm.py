@@ -27,6 +27,10 @@ def GetAccountBUs(accountid:str) -> dict:
                 , bi.name nome_fantasia
                 , bi.facebook
                 , bi.instagram
+                , bi.twitter
+                , bi.linkedin
+                , bi.youtube
+                , bi.tiktok
                 , case when bi.url LIKE '%telelistas.com.br%' then '' else replace(replace(bi.url,'http://',''),'https://','') END website
                 , SUBSTRING_INDEX(fk.fk,'_',1) id_cliente
                 , GROUP_CONCAT( CONCAT(ph.phone_type_id,'-',ph.area_code,'-',ph.number)  ORDER BY ph.sort_order SEPARATOR '|' ) phones
@@ -99,6 +103,10 @@ def GetBU(buid:str) -> dict:
                 , bi.name nome_fantasia
                 , bi.facebook
                 , bi.instagram
+                , bi.twitter
+                , bi.linkedin
+                , bi.youtube
+                , bi.tiktok
                 , case when bi.url LIKE '%telelistas.com.br%' then '' else replace(replace(bi.url,'http://',''),'https://','') END website
                 , SUBSTRING_INDEX(fk.fk,'_',1) id_cliente
                 , GROUP_CONCAT( CONCAT(ph.phone_type_id,'-',ph.area_code,'-',ph.number)  ORDER BY ph.sort_order SEPARATOR '|' ) phones
@@ -180,11 +188,11 @@ def PutSuiteID(buid:str, suiteid:str) -> bool:
     Return: bool indicando se conseguiu ou não fazer a atualização
     """
 
-    if buid and suiteid:
+    if buid:
         cmd = f"""UPDATE linkmercado.core_business_units bu
                   JOIN linkmercado.core_accounts ac
                     ON ac.id = bu.account_id
-                  SET bu.suite_id = '{suiteid}', ac.company_id = 3
+                  SET bu.suite_id = '{suiteid}', ac.company_id = CASE WHEN '{suiteid}' = '' THEN ac.company_id ELSE 3 END
                   WHERE bu.id = '{buid}' and bu.account_id > 1"""
         resp = mysql_pool.execute(cmd, cursor_args={"buffered": True, "dictionary": True}, commit=True, lastInserted=True)
         return True if resp and resp.get('rowcount') else False
