@@ -339,9 +339,9 @@ def _infosComuns(CRM, suite_id:str, entity_data:dict):
     gerente_relacionamento = entity_data.get("users_accounts_1users_ida")
     conta_mestre = entity_data.get("parent_id")
     s, r = dal_crm.Get(CRM, module="accounts", filtro={'id': suite_id})
-    id_conta_lm = r.get('data',[{}])[0].get("id_conta_lm_c") if r else None
+    id_conta_lm = r.get('data',[{}])[0].get("id_conta_lm_c",'0') if r else '0'
     # se informou o Representante Comercial ou o Gerente de Relacionamento e uma conta Mestre
-    if id_conta_lm:
+    if id_conta_lm != '0':
         _dados = dict()
         if representante_comercial:
             _dados["assigned_user_id"] = representante_comercial
@@ -349,26 +349,24 @@ def _infosComuns(CRM, suite_id:str, entity_data:dict):
             _dados["users_accounts_1users_ida"] = gerente_relacionamento
         if conta_mestre:
             _dados["parent_id"] = conta_mestre
-        # força todas as crm_contas a ter o mesmo Representante e/ou Gerente
-        for conta in dal_crm.Account_Get(CRM, account_id=id_conta_lm):
-            _dados["id"] = conta.get('id')
-            if _dados["id"] != suite_id:
-                _s, _d = dal_crm.Put(CRM, module="accounts", entity_data=_dados)
-                if not _s:
-                    print(_d)
+        if _dados:
+            # força todas as crm_contas a ter o mesmo Representante e/ou Gerente
+            for conta in dal_crm.Account_Get(CRM, account_id=id_conta_lm):
+                _dados["id"] = conta.get('id')
+                if _dados["id"] != suite_id:
+                    _s, _d = dal_crm.Put(CRM, module="accounts", entity_data=_dados)
+                    if not _s:
+                        print(_d)
 
 
 def Get(module:str, filtro:dict=dict()) -> tuple[bool, dict]:
     if module in ['conta']:
         module = 'accounts'
-        id_cliente = filtro.get('id_cliente')
-        if id_cliente:
-            del filtro['id_cliente']
-            filtro['id_cliente_c'] = id_cliente
+        if filtro.get('id_cliente') or filtro.get('id_cliente_c'):
+            CRM = SuiteCRM.SuiteCRM(logger)
+            return dal_crm.Get(CRM, module=module, filtro=filtro)
         else:
             return False, { 'msg':'O ID do Cliente não foi informado [id_cliente].' }
-    CRM = SuiteCRM.SuiteCRM(logger)
-    return dal_crm.Get(CRM, module=module, filtro=filtro)
 
 
 def Put(module:str, entity_data:dict) -> tuple[bool, dict]:

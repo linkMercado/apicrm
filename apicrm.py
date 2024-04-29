@@ -49,7 +49,7 @@ def logar(func):
 @logar
 def app_procedures(procedure):
     if request.method == 'GET':
-        args = request.args
+        args = request.args.to_dict()
     else:
         args = request.get_json()
     if procedure == "cria_notificacao":
@@ -65,6 +65,8 @@ def app_procedures(procedure):
 def app_crm(module):
     if request.method == 'GET':
         args = request.args.to_dict()
+        if not args:
+            args = request.get_json()
     else:
         args = request.get_json()
 
@@ -123,7 +125,7 @@ def after_request_func(response: Response) -> Response:
 @logar
 def app_sync():
     if request.method == 'GET':
-        args = request.args
+        args = request.args.to_dict()
     else:
         args = request.get_json()
     buids = args.get('buid')
@@ -157,7 +159,7 @@ def app_sync():
 @logar
 def app_notification():
     if request.method == 'GET':
-        args = request.args
+        args = request.args.to_dict()
     else:
         args = request.get_json()
     idcliente = args.get('idcliente')
