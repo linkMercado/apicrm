@@ -40,8 +40,6 @@ def sync_BO2CRM_Account(account_id:str, userid:str=None, crm_user_id:str=None, g
     # e escolhe o assigned_user_id que mais aparece (só deveria haver 1!)
     # e escolhe o gerente_relacionamento que mais aparece (só deveria haver 1!)
     # e escolhe a conta Master que mais aparece (só deveria haver 1!)
-
-    # resposta em _crm_user_id
     _crm_user_id = WATSON_UserID
     _users_accounts_1users_ida = None
     _master_id = None
@@ -113,15 +111,18 @@ def sync_BO2CRM_Account(account_id:str, userid:str=None, crm_user_id:str=None, g
                 contato_id = crm_contato[0]['id']                    
             lista_contatos += f"{contato_id},"
 
-    for budata in dal_lm.GetAccountBUs(account_id):
+    for budata in dal_lm.GetAccountBUs(account_id,[]):
         suite_id = budata.get('suite_id')
         bu_id = budata.get('id')
+        id_cliente = budata.get('id_cliente')
+
         for k, v in enumerate(crm_accounts): 
             if v.get('id') == suite_id: 
                 del crm_accounts[k]
                 break
         account_data = mod_crm.Account.fromBO(budata).__dict__
         account_data['assigned_user_id'] = _crm_user_id
+        
         if gerente_relacionamento:
             account_data['gerente_relacionamento_name'] = gerente_relacionamento
         else:
@@ -130,7 +131,7 @@ def sync_BO2CRM_Account(account_id:str, userid:str=None, crm_user_id:str=None, g
 
         if _master_id:
             account_data['parent_id'] = _master_id
-            
+
         respostas[bu_id] = ""
         suite_ids[bu_id] = suite_id
 
@@ -143,23 +144,49 @@ def sync_BO2CRM_Account(account_id:str, userid:str=None, crm_user_id:str=None, g
         if suite_id:
             _crmdata = dal_crm.Account_Get(CRM, id=suite_id)
             if len(_crmdata) > 0:
-                for crmdata in _crmdata:
-                    account_data['assigned_user_id'] = _crm_user_id
-                    # se inativo no BO ou no CRM
-                    if crmdata.get('status_c') == 'Inativo' or budata.get('status') != 0:
-                        # remove do CRM
+                crmdata = _crmdata[0]
+                account_data['assigned_user_id'] = _crm_user_id
+                
+                # se inativo no BO, remove do CRM
+                if budata.get('status') != 0:
+                    # verifica sem tem mais bu_id ou id_cliente nas listas
+                    account_data['list_bu_id_c'] = crmdata.get('list_bu_id_c','').replace(f"{bu_id},",'')
+                    account_data['list_id_cliente_c'] = crmdata.get('list_id_cliente_c','').replace(f"{id_cliente},",'')
+                    # remove do CRM se listas vazias
+                    dal_lm.PutSuiteID(bu_id, '') # marca no BO que saiu
+                    if len(account_data['list_bu_id_c']) == 0 and len(account_data['list_id_cliente_c']) == 0:
                         removeu = dal_crm.Account_Delete(CRM, suite_id)
                         if removeu:
-                            dal_lm.PutSuiteID(bu_id, '')
                             respostas[bu_id] += 'Removido CRM, inativo.'
                         else:
                             respostas[bu_id] += 'Tentativa de remoção do CRM.'
                         suite_ids[bu_id] = None
                         break
                     else:
+                        # verifica se existe master conhecido, senão passa a ser este
+                        if not _master_id:
+                            _master_id = suite_id
+                        account_data['parent_id'] = _master_id
                         # atualiza !
                         atualizou = dal_crm.Account_Update(CRM, account_data)
-                        respostas[bu_id] += 'Atualizado.' if atualizou else 'Erro ao atualizar.'
+                        respostas[bu_id] += 'Removido da lista interna do CRM por inativo' if atualizou else 'Erro ao remover da lista.'
+                        suite_ids[bu_id] = None
+                        break
+
+                # verifica se o bu_id está na lista
+                if f"{bu_id}," not in crmdata.get('list_bu_id_c'):
+                    account_data['list_bu_id_c'] = f"{crmdata.get('list_bu_id_c')}{bu_id},"
+                if  f"{id_cliente}," not in crmdata.get('list_id_cliente_c'):
+                    account_data['list_id_cliente_c'] = f"{crmdata.get('list_id_cliente_c')}{id_cliente},"
+
+                # verifica se existe master conhecido, senão passa a ser este
+                if not _master_id:
+                    _master_id = suite_id
+                account_data['parent_id'] = _master_id
+
+                # atualiza !
+                atualizou = dal_crm.Account_Update(CRM, account_data)
+                respostas[bu_id] += 'Atualizado.' if atualizou else 'Erro ao atualizar.'
             else:
                 # estranho não achar no CRM pois tinha suite_id, marca para criar
                 suite_id = None
@@ -180,19 +207,42 @@ def sync_BO2CRM_Account(account_id:str, userid:str=None, crm_user_id:str=None, g
                 for _acc in dal_crm.Account_Get(CRM, id=None, account_id=account_id):
                     if _acc.get('shipping_address_street').replace(' ','').replace('-','').replace(',','') == _address:
                         suite_id = _acc.get('id')
+                        
+                        # atualiza o suite_id no BO
                         account_data['id'] = suite_id
                         dal_lm.PutSuiteID(bu_id, suite_id)
                         suite_ids[bu_id] = suite_id
+
+                        # como achou por endereço, atualiza a lista de id_cliente e bu_id do suite_id
+                        # pois mais de um registro no BO aponta para o mesmo suite_id
+                        if f"{bu_id}," not in _acc.get('list_bu_id_c'):
+                            account_data['list_bu_id_c'] = f"{_acc.get('list_bu_id_c')}{bu_id},"
+                        if f"{id_cliente}," not in _acc.get('list_id_cliente_c'):
+                            account_data['list_id_cliente_c'] = f"{_acc.get('list_id_cliente_c')}{id_cliente},"
+
+                        # informa que foi processado
+                        for k, v in enumerate(crm_accounts): 
+                            if v.get('bu_id_c') == str(bu_id): 
+                                del crm_accounts[k]
+                                break
+
                         break
             else:
                 respostas[bu_id] = 'Não sincronizado, sem endereço no BO.'
                 continue
+
+            # verifica se existe master conhecido, senão passa a ser este
+            if not _master_id:
+                _master_id = suite_id
+            account_data['parent_id'] = _master_id                
 
             if suite_id:
                 atualizou = dal_crm.Account_Update(CRM, account_data)
                 respostas[bu_id] += 'Atualizado.' if atualizou else 'Erro ao atualizar.'
             else:    
                 # cria no CRM
+                account_data['list_bu_id_c'] = str(bu_id) + ','
+                account_data['list_id_cliente_c'] = str(id_cliente) + ',' 
                 _, crm_account = dal_crm.Account_Create(CRM, account_data)
                 if crm_account:
                     suite_id = crm_account.get('id')
@@ -213,27 +263,23 @@ def sync_BO2CRM_Account(account_id:str, userid:str=None, crm_user_id:str=None, g
     # sobrou account ? Remover do CRM !!
     for _acc in crm_accounts:
         suite_id = _acc.get('id')
-        bu_id = int(_acc.get('bu_id_c'))
-
-        if suite_id and bu_id:
+        if suite_id:
             # remove do CRM
             removeu = dal_crm.Account_Delete(CRM, suite_id)
             if removeu:
-                dal_lm.PutSuiteID(bu_id, '')
-                # pode ser que não esteja no vetor de respostas
-                try:
-                    respostas[bu_id] += 'Removido CRM, inativo.'
-                except:
-                    respostas[bu_id] = 'Removido CRM, inativo.'
+                if _acc.get('bu_id_c'):
+                    bu_id = int(_acc.get('bu_id_c'))
+                    suite_ids[bu_id] = suite_id
+                    dal_lm.PutSuiteID(bu_id, '')
+                    # pode ser que não esteja no vetor de respostas
+                    try:
+                        respostas[bu_id] += 'Removido CRM, inativo.'
+                    except:
+                        respostas[bu_id] = 'Removido CRM, inativo.'
             else:
-                # pode ser que não esteja no vetor de respostas
-                try:
-                    respostas[bu_id] += 'Tentativa de remoção sem sucesso do CRM.'
-                except:
-                    respostas[bu_id] = 'Tentativa de remoção sem sucesso do CRM.'
-            suite_ids[bu_id] = suite_id
+                logger.critical(f"Erro na remoção do Account: {suite_id} .")
         else:
-            logger.critical(f"Account {suite_id} sem bu_id !")
+            logger.critical(f"Account: {suite_id} sem suite_id !")
 
     return respostas, suite_ids
 
@@ -360,13 +406,17 @@ def _infosComuns(CRM, suite_id:str, entity_data:dict):
 
 
 def Get(module:str, filtro:dict=dict()) -> tuple[bool, dict]:
-    if module in ['conta']:
+    if module == 'conta':
         module = 'accounts'
-        if filtro.get('id_cliente') or filtro.get('id_cliente_c'):
-            CRM = SuiteCRM.SuiteCRM(logger)
-            return dal_crm.Get(CRM, module=module, filtro=filtro)
-        else:
+        if not filtro.get('id_cliente') and not filtro.get('id_cliente_c') and not filtro.get('id'):
             return False, { 'msg':'O ID do Cliente não foi informado [id_cliente].' }
+    elif module == 'contato':
+        module = 'contacts'
+        if not filtro.get('nome') and not filtro.get('name') and not filtro.get('email') and not filtro.get('first_name') and not filtro.get('id'):
+            return False, { 'msg':'Os filtros possíveis são [nome], [email], [first_name] e [id].' }
+
+    CRM = SuiteCRM.SuiteCRM(logger)
+    return dal_crm.Get(CRM, module=module, filtro=filtro)
 
 
 def Put(module:str, entity_data:dict) -> tuple[bool, dict]:
@@ -385,6 +435,11 @@ def Put(module:str, entity_data:dict) -> tuple[bool, dict]:
                     return False, { 'msg':'O Cliente não foi encontrado.' }
         else:
             return False, { 'msg':'O ID do Cliente não foi informado [id_cliente].' }
+    elif module == 'contato':
+        module = 'contacts'
+        if not entity_data.get('id'):
+            return False, { 'msg':'O ID do contato precisa ser informado [id].' }
+
     s, d = dal_crm.Put(CRM, module=module, entity_data=entity_data)
     suite_id = d.get('data',{}).get('id') if d else None
     if suite_id and module == 'accounts':
@@ -400,6 +455,11 @@ def Post(module:str, entity_data:dict) -> tuple[bool, dict]:
         if id_cliente:
             del entity_data['id_cliente']
             entity_data['id_cliente_c'] = id_cliente
+    elif module == 'contato':
+        module = 'contacts'
+        if not entity_data.get('id_cliente') and not entity_data.get('id_cliente_c'):
+            return False, { 'msg':'Falta indicação da Conta associada a esse Contato [id_cliente].' }
+        
     CRM = SuiteCRM.SuiteCRM(logger)
     s, d = dal_crm.Post(CRM, module=module, entity_data=entity_data)
     suite_id = d.get('data',{}).get('id') if d else None
@@ -427,3 +487,6 @@ def Delete(module:str, entity_data:dict) -> bool:
 #print() 
 
 # cria_notificacao(business_unit_id=719825816, titulo="Site publicado !", texto="OK")
+
+
+

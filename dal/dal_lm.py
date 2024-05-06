@@ -64,7 +64,7 @@ def GetAccountBUs(accountid:str) -> dict:
                     ON u.id = am.user_id
                 WHERE bu.account_id = '{accountid}'
                 GROUP BY bu.id
-                ORDER BY fk.priority ASC"""
+                ORDER BY bu.status ASC, fk.priority DESC"""
         respBU = mysql_pool.execute(cmd, cursor_args={"buffered": True, "dictionary": True}, commit=False)
     else:
         respBU = None

@@ -135,18 +135,21 @@ def app_sync():
     resp_status = 200
     if buids or accountid:
         if buids:
+            accountid = None
+            resp = {'status': 'ERRO', 'msg': 'Account_id não encontrado na Base' }
+            resp_status = 400
+
             accids = dal_lm.GetAccountsIDs([buids,])
-            if accids and len(accids) == 1:
-                accountid = accids[0].get('account_id')
-            else:
-                accountid = None
+            if accids:
+                if len(accids) == 1:
+                    accountid = accids[0].get('account_id')
+                elif len(accids) > 1:
+                    resp = {'status': 'ERRO', 'msg': 'Mais de um account_id informado, verifique !' }
+                    resp_status = 400
         if accountid:                
             msg, buids = ctl_procs.sync_BO2CRM_Account(account_id=accountid, userid=userid)
             resp = {'status': 'OK' if msg else 'ERRO', 'msg' : msg, 'buids' : buids }
             resp_status = 200 if msg else 400
-        else:
-            resp = {'status': 'ERRO', 'msg': 'Account_id id não encontrado na Base' }
-            resp_status = 400
     else:
         resp = {'status': 'ERRO', 'msg': 'BU id não informado [buid]' }
         resp_status = 400
