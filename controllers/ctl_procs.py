@@ -111,7 +111,8 @@ def sync_BO2CRM_Account(account_id:str, userid:str=None, crm_user_id:str=None, g
                 contato_id = crm_contato[0]['id']                    
             lista_contatos += f"{contato_id},"
 
-    for budata in dal_lm.GetAccountBUs(account_id,[]):
+    lm_bus = dal_lm.GetAccountBUs(account_id)
+    for budata in lm_bus if lm_bus else []:
         suite_id = budata.get('suite_id')
         bu_id = budata.get('id')
         id_cliente = budata.get('id_cliente')
