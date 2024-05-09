@@ -423,6 +423,80 @@ def sync_CRM2BO_Account() -> tuple[str: dict]:
             resp += f"Account {account_id}:{CRLF}{TAB}{msg_list}"
     return resp, suite_ids
 
+
+def trata_contatos(CRM, suite_id:str, contatos:list=list()) -> dict:
+    def GetContato(k):
+        __name = k.get('nome') if k.get('nome') else k.get('name')
+        __name = re.sub('[^a-zA-Z0-9]', '', __name) if __name else ''
+        __email = k.get('email')
+        __document = re.sub('[^0-9]', '', k.get('document')) if k.get('document') else ''
+        __phone = SuiteCRM.format_phone(k.get('phone'), internacional=True)
+        __mobile_phone = SuiteCRM.format_phone(k.get('mobile_phone'), internacional=True)
+        # verifica se autorizador está no CRM
+        crm_contatos = dal_crm.Contact_Get(CRM, name=__name, email=__email, document=__document, phone=__phone, mobile_phone=__mobile_phone)
+        # se retornou mais de um, qual dos contatos ?
+        _crm_contato = None
+        if crm_contatos and len(crm_contatos) == 1:
+            _crm_contato = crm_contatos[0]
+        else:
+            nota_maxima = 0
+            for crm_contato in crm_contatos if crm_contatos else []:
+                nota = 0
+                nota += 1 if __name and re.sub('[^a-zA-Z0-9]', '', crm_contato.get('name') if crm_contato.get('name') else '') == __name else 0
+                nota += 1 if __email and crm_contato.get('email') == __email else 0
+                nota += 1 if __document and re.sub('[^0-9]', '', crm_contato.get('document') if crm_contato.get('document') else '') == __document else 0
+                nota += 1 if __phone and SuiteCRM.format_phone(crm_contato.get('phone'), internacional=True) == __phone else 0
+                nota += 1 if __mobile_phone and SuiteCRM.format_phone(crm_contato.get('mobile_phone'), internacional=True) == __mobile_phone else 0
+                if nota > nota_maxima:
+                    nota_maxima = nota
+                    _crm_contato = crm_contato
+        return _crm_contato
+
+    lista_contatos:str = ''
+    for contato in contatos:
+        # verifica se o contato existe
+        crm_contato = GetContato(CRM, contato)
+        if crm_contato:
+            contato['id'] = crm_contato.get('id')
+            lista_contatos += f"{contato['id']},"
+            r = dal_crm.Contact_Update(CRM, contato)
+            print(r)
+        else:
+            r = dal_crm.Contact_Create(CRM, contato)
+            lista_contatos += f"{r.get('id')},"
+            print(r)
+    dal_crm.Associa_contatos(CRM, suite_id, lista_contatos[:-1])
+    
+
+def trata_contratos(CRM, suite_id:str, contratos) -> None:
+    def GetContrato(k):
+        __name = k.get('numero') if k.get('numero') else k.get('name')
+        # verifica se está no CRM
+        crm_contratos = dal_crm.Contract_Get(CRM, name=__name)
+        _crm_contrato = None
+        if crm_contratos and len(crm_contratos) == 1:
+            _crm_contrato = crm_contratos[0]
+        else:
+            print('ERRO BRABO !')
+        return _crm_contrato
+
+    lista_contratos:str = ''
+    for contrato in contratos:
+        # verifica se o contato existe
+        crm_contato = GetContrato(CRM, contrato)
+        if crm_contato:
+            contrato['id'] = crm_contato.get('id')
+            lista_contratos += f"{contrato['id']},"
+            r = dal_crm.Contract_Update(CRM, contrato)
+            print(r)
+        else:
+            r = dal_crm.Contract_Create(CRM, contrato)
+            lista_contratos += f"{r.get('id')},"
+            print(r)
+    dal_crm.Associa_contratos(CRM, suite_id, lista_contratos[:-1])
+        
+
+
 def _infosComuns(CRM, suite_id:str, entity_data:dict):
     representante_comercial = entity_data.get("assigned_user_id")
     gerente_relacionamento = entity_data.get("users_accounts_1users_ida")
@@ -478,6 +552,13 @@ def Put(module:str, entity_data:dict) -> tuple[bool, dict]:
                     return False, { 'msg':'O Cliente não foi encontrado.' }
         else:
             return False, { 'msg':'O ID do Cliente não foi informado [id_cliente].' }
+        contatos = entity_data.get('CONTATOS')
+        if contatos:
+            entity_data.remove('CONTATOS')
+        contratos = entity_data.get('CONTRATOS')
+        if contratos:
+            entity_data.remove('CONTRATOS')
+
     elif module == 'contato':
         module = 'contacts'
         if not entity_data.get('id'):
@@ -488,6 +569,8 @@ def Put(module:str, entity_data:dict) -> tuple[bool, dict]:
     if suite_id and module == 'accounts':
         # trata as informações que devem ser as mesmas para todas as contas com o mesmo id_conta_lm_
         _infosComuns(CRM, suite_id, entity_data)
+        if contatos: trata_contatos(CRM, suite_id, contatos)
+        if contratos: trata_contratos(CRM, suite_id, contratos)
     return s, d
 
 

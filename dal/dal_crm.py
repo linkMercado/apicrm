@@ -117,6 +117,14 @@ def Contact_Create(CRM, contact_data:dict) -> tuple[str,dict]:
         return 'Sim informação', None
 
 
+def Contract_Create(CRM, contract_data:dict) -> tuple[str,dict]:
+    if contract_data:
+        error, data = CRM.PostData("contracts", parametros=contract_data)
+        return error, data
+    else:
+        return 'Sim informação', None
+    
+
 def Contact_Update(CRM, contact_data:dict) -> bool:
     if contact_data:
         _, data = CRM.PutData("contacts", parametros=contact_data)
@@ -124,7 +132,14 @@ def Contact_Update(CRM, contact_data:dict) -> bool:
         return True if id else False
     else:
         return False
-
+    
+def Contract_Update(CRM, contract_data:dict) -> bool:
+    if contract_data:
+        _, data = CRM.PutData("contracts", parametros=contract_data)
+        id = data.get("id") if data else None
+        return True if id else False
+    else:
+        return False
 
 def Cria_contato(CRM, parametros):
     return CRM.cria_contato(**parametros)
@@ -140,3 +155,7 @@ def Ticket_Create(CRM, ticket_data:dict) -> dict:
 
 def Associa_contatos(CRM, crm_account_id:str, crm_contact_ids:str) -> bool:
     return CRM.AssociateData("accounts", base_record_id=crm_account_id, relate_module="contacts", relate_record_ids=crm_contact_ids)
+
+
+def Associa_contratos(CRM, crm_account_id:str, crm_contract_ids:str) -> bool:
+    return CRM.AssociateData("accounts", base_record_id=crm_account_id, relate_module="contracts", relate_record_ids=crm_contract_ids)
