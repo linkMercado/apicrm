@@ -159,6 +159,7 @@ def GetAutorizadores(accountid:str):
                 JOIN linkmercado.core_users u
                     ON u.id = p.user_id
                 WHERE p.account_id = {accountid} AND u.status = 0 AND u.email not like '%.local'
+                ORDER BY p.role DESC
         """
         autorizadores = mysql_pool.execute(cmd, cursor_args={"buffered": True, "dictionary": True}, commit=False)
         return autorizadores

@@ -1,3 +1,4 @@
+import re
 
 from apicrm import LOGGER as logger
 from apicrm import SUITECRM as SuiteCRM 
@@ -99,16 +100,57 @@ def sync_BO2CRM_Account(account_id:str, userid:str=None, crm_user_id:str=None, g
     autorizadores = dal_lm.GetAutorizadores(account_id)
     if autorizadores:
         for autorizador in autorizadores:
+            __name = re.sub('[^a-zA-Z0-9]', '', autorizador['name']) if autorizador.get('name') else ''
+            __email = autorizador['email']
+            __document = re.sub('[^0-9]', '', autorizador['document']) if autorizador.get('document') else ''
+            __phone = SuiteCRM.format_phone(autorizador.get('phone'), internacional=True)
+            __mobile_phone = SuiteCRM.format_phone(autorizador.get('mobile_phone'), internacional=True)
+
             # verifica se autorizador está no CRM
-            crm_contato = dal_crm.Contact_Get(CRM, name=autorizador['name'], email=autorizador['email'], document=autorizador['document'], phone=autorizador['phone'], mobile_phone=autorizador['mobile_phone'])
+            crm_contatos = dal_crm.Contact_Get(CRM, name=autorizador['name'], email=autorizador['email'], document=autorizador['document'], phone=autorizador['phone'], mobile_phone=autorizador['mobile_phone'])
+
+            # se retornou mais de um, qual dos contatos ?
+            _crm_contato = None
+            if crm_contatos and len(crm_contatos) == 1:
+                _crm_contato = crm_contatos[0]
+            else:
+                nota_maxima = 0
+                for crm_contato in crm_contatos if crm_contatos else []:
+                    nota = 0
+                    nota += 1 if __name and re.sub('[^a-zA-Z0-9]', '', crm_contato.get('name') if crm_contato.get('name') else '') == __name else 0
+                    nota += 1 if __email and crm_contato.get('email') == __email else 0
+                    nota += 1 if __document and re.sub('[^0-9]', '', crm_contato.get('document') if crm_contato.get('document') else '') == __document else 0
+                    nota += 1 if __phone and SuiteCRM.format_phone(crm_contato.get('phone'), internacional=True) == __phone else 0
+                    nota += 1 if __mobile_phone and SuiteCRM.format_phone(crm_contato.get('mobile_phone'), internacional=True) == __mobile_phone else 0
+                    if nota > nota_maxima:
+                        nota_maxima = nota
+                        _crm_contato = crm_contato
+
             # cria o contato ?
-            if not crm_contato:
+            if not _crm_contato:
                 _, crm_contato = dal_crm.Contact_Create(CRM, mod_crm.Contact().fromBO(autorizador).__dict__)
                 contato_id = crm_contato.get('id')
                 logger.info(f"Contato criado no SuiteCRM c:{autorizador}, id:{contato_id}")
             else:
-                # TODO se achou, marca como Autorizador ou UsuárioBO
-                contato_id = crm_contato[0]['id']                    
+                contato_id = _crm_contato.get('id')
+                _contato = mod_crm.Contact().fromBO(autorizador).__dict__
+                _tipo_autorizador = _crm_contato.get("tipocontato_c",[])
+                if '^Usuariobackoffice^' in _tipo_autorizador:
+                    _tipo_autorizador.remove('^Usuariobackoffice^')
+                if '^Autorizador^' in _tipo_autorizador:
+                    _tipo_autorizador.remove('^Autorizador^')
+                # ajustes legados - inicio
+                if 'Usuariobackoffice' in _tipo_autorizador:
+                    _tipo_autorizador.remove('Usuariobackoffice')
+                if 'Autorizador' in _tipo_autorizador:
+                    _tipo_autorizador.remove('Autorizador')
+                # ajustes legados - fim
+                for lm_tipoautorizador in _contato.get("tipocontato_c",[]):
+                    if lm_tipoautorizador not in _tipo_autorizador:
+                        _tipo_autorizador.extend([lm_tipoautorizador])
+                _contato["tipocontato_c"] = _tipo_autorizador
+                _contato['id'] = contato_id
+                atualizou = dal_crm.Contact_Update(CRM, _contato)
             lista_contatos += f"{contato_id},"
 
     lm_bus = dal_lm.GetAccountBUs(account_id)
@@ -475,7 +517,6 @@ def Delete(module:str, entity_data:dict) -> bool:
     return dal_crm.Delete(CRM, module=module, entity_data=entity_data)
 
 # sync_bo()
-# jb
 # sync_account(19825816) # bysdev
 
 #w = sync_CRM2BO_Account()

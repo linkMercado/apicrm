@@ -77,20 +77,29 @@ class Account(object):
         phones = budata.get('phones')
         if phones:
             _phones = phones.decode().split('|')
-            _phone_office = ''
-            _phone_alternate = '' 
+            _phone_office = None
+            _phone_alternate = None
+            _phone_whatsapp = None
             for ph in _phones:
                 phone = ph.split('-')
-                if phone[0] == '6':
-                    cls.phone_whatsapp = f"({phone[1]}) {phone[2]}"
+                if phone[0] in ['6','8','1']:
+                    if not _phone_whatsapp:
+                        _phone_whatsapp = f"{phone[1]}{phone[2]}"
                 else:
                     if _phone_office:
                         if not _phone_alternate:
-                            _phone_alternate = f"({phone[1]}) {phone[2]}"
+                            _phone_alternate = f"{phone[1]}{phone[2]}"
                     else:
-                        _phone_office = f"({phone[1]}) {phone[2]}"
-            if _phone_office: cls.phone_office = _phone_office
+                        _phone_office = f"{phone[1]}{phone[2]}"
+                if _phone_office and _phone_alternate and _phone_whatsapp:
+                    # se já achou os 3 telefones, sai do loop
+                    break
+            if _phone_office: 
+                cls.phone_office = _phone_office
+            elif _phone_whatsapp:
+                cls.phone_office = phone=_phone_whatsapp
             if _phone_alternate: cls.phone_alternate = _phone_alternate
+            if _phone_whatsapp: cls.phone_whatsapp = _phone_whatsapp
 
         emails = budata.get('emails')
         if emails:
@@ -118,7 +127,7 @@ class Lead(object):
         cls = Lead()
         cls.job_criou_lead_c = 'api_crm_dudaform'
         cls.email_address = dudaform['email']
-        cls.phone_home = dudaform['telefone']
+        cls.phone_home = dudaform.get('telefone')
         cls.descricao_lead_c = dudaform['mensagem']
         _nome = dudaform['nome'].split(' ')
         if len(_nome) > 1:
@@ -142,21 +151,23 @@ class Contact(object):
     @classmethod
     def fromBO(cls, bodata:dict):    
         cls = Contact()
-        names = bodata['name'].split(' ') if bodata['name'] else ['sem primeiro nome', 'sem último nome']
+        names = bodata['name'].split(' ') if bodata.get('name') else ['sem primeiro nome', 'sem último nome']
         cls.first_name = names[0]
         if len(names) > 1:
             cls.last_name = ' '.join(names[1:])
-        if bodata['email']:
+        if bodata.get('email'):
             cls.email_address = bodata['email']
-        if bodata['document']:
+        if bodata.get('document'):
             cls.cpf_c = bodata['document']
-        if bodata['phone']:
-            cls.phone_work = bodata['phone']
-        if bodata['mobile_phone']:
-            cls.phone_mobile= bodata['mobile_phone']
-        if str(bodata['principal']) == "1":
+        if (_phone:=bodata.get('phone')):
+            cls.phone_work = _phone
+        if (_phone:=bodata.get('mobile_phone')):
+            cls.phone_mobile = _phone
+        if (_phone:=bodata.get('phone_whatsapp')):
+            cls.phone_fax = _phone
+        if bodata.get('principal',0) == 1:
             cls.contatoprincipal_c = 1
-            cls.tipocontato_c = ["^Autorizador^"]
+            cls.tipocontato_c = ['^Autorizador^']
         else:
-            cls.tipocontato_c = ["^Usuariobackoffice^"]
+            cls.tipocontato_c = ['^Usuariobackoffice^']
         return cls

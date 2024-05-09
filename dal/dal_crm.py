@@ -67,7 +67,7 @@ def Account_Create(CRM, account_data:dict) -> tuple[str,dict]:
         return 'sem dados para cadastrar', None
 
 
-def Account_Update(CRM, account_data:dict) -> dict:
+def Account_Update(CRM, account_data:dict) -> bool:
     if account_data:
         _, data = CRM.PutData("accounts", parametros=account_data)
         id = data.get("id") if data else None
@@ -87,7 +87,7 @@ def User_Get(CRM, id:str=None, username:str=None, email:str=None) -> dict:
     return CRM.getColaborador(id=id, username=username, email=email)
 
 
-def Contact_Get(CRM, id:str=None, name:str=None, email:str=None, document:str=None, phone:str=None, mobile_phone:str=None) -> dict:
+def Contact_Get(CRM, id:str=None, name:str=None, email:str=None, document:str=None, phone:str=None, mobile_phone:str=None, whatsapp:str=None) -> dict:
     filtro = dict()
     if id:
         filtro['id'] = id
@@ -101,6 +101,8 @@ def Contact_Get(CRM, id:str=None, name:str=None, email:str=None, document:str=No
         filtro['phone_work'] = phone
     if mobile_phone:
         filtro['phone_mobile'] = mobile_phone
+    if whatsapp:
+        filtro['phone_fax'] = whatsapp
     if filtro:        
         return CRM.GetData("contacts", filtro=filtro)
     else:
@@ -113,6 +115,15 @@ def Contact_Create(CRM, contact_data:dict) -> tuple[str,dict]:
         return error, data
     else:
         return 'Sim informação', None
+
+
+def Contact_Update(CRM, contact_data:dict) -> bool:
+    if contact_data:
+        _, data = CRM.PutData("contacts", parametros=contact_data)
+        id = data.get("id") if data else None
+        return True if id else False
+    else:
+        return False
 
 
 def Cria_contato(CRM, parametros):
