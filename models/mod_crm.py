@@ -139,6 +139,28 @@ class Lead(object):
         cls.date_entered = dudaform['event_date']
         return cls
 
+    @classmethod
+    def fromRdStationWebhook(cls, rddata:dict) -> 'Lead':
+        cls = Lead()
+        cls.origem = 'WPP' if rddata.get('conversion_identifier') == "lm-faleconosco" else 'FORM'
+        if rddata.get('domain'): cls.dominio = rddata.get('domain')
+        if rddata.get('company'): cls.department = rddata.get('company')
+        if rddata.get('email'): cls.email_address = rddata.get('email')
+        if rddata.get('personal_phone'): cls.phone_home = rddata.get('personal_phone')
+        if rddata.get('mobile_phone'): cls.phone_fax = rddata.get('mobile_phone') 
+        _nome = rddata.get('name','').strip().split(' ')
+        if len(_nome) > 1:
+            cls.first_name = _nome[0]
+            cls.last_name = (' '.join(_nome[1:])).strip()
+        else:
+            cls.first_name = _nome[0].strip()
+        cls.date_entered = rddata.get('wpp_date')
+        cls.job_criou_lead_c = 'api_crm_rdstationwebhook'
+        cls.lead_source = 'Campaign'
+        cls.chegou_atraves_c = 'google_ads'
+        cls.canal_de_entrada_c = 'whatsapp'
+        return cls
+
 
 
 class Contact(object):
