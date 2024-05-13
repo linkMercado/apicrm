@@ -57,6 +57,16 @@ def app_procedures(procedure):
             msg = ctl_procs.cria_notificacao(**args)
         except Exception as e:
             msg = f"{e}"
+    elif procedure == "processa_arquivo_contas":
+        try:
+            msg = ctl_procs.processa_arquivo_contas(**args)
+        except Exception as e:
+            msg = f"{e}"
+    elif procedure == "processa_arquivo_contratos":
+        try:
+            msg = ctl_procs.processa_arquivo_contratos(**args)
+        except Exception as e:
+            msg = f"{e}"
     return Response(msg, mimetype='application/json', status=200) 
 
 
