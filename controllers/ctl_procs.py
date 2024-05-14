@@ -776,8 +776,10 @@ def processa_arquivo_contratos(file_path:str, skiplines:int=0) -> str:
                     crm_contrato = dal_crm.Contract_Get(CRM, name=contract_data['name'])
 
                     # verifica se a conta existe
-                    if contract_data.get('id_cliente'):
-                        crm_account = dal_crm.Account_Get(CRM, id_cliente=contract_data['id_cliente'])
+                    if contract_data.get('id_cliente_c'):
+                        crm_account = dal_crm.Account_Get(CRM, id_cliente=contract_data['id_cliente_c'])
+                    else:
+                        crm_account = None
 
                     if crm_account:
                         contract_data['contract_account_id'] = crm_account[0].get('id')
@@ -785,7 +787,7 @@ def processa_arquivo_contratos(file_path:str, skiplines:int=0) -> str:
                             contract_data['id'] = crm_contrato[0].get('id')
                             s, k = dal_crm.Contract_Update(CRM, contract_data)
                             if s:
-                                logger.debug(f"Erro:{s}, Contrato:{contract_data['id']} não foi atualizado. Dados:{contract_data}")
+                                logger.debug(f"Erro:{s}, Contrato:{contract_data.get('id')} não foi atualizado. Dados:{contract_data}")
                             else:
                                 atualizacoes += 1
                         else:
@@ -795,10 +797,10 @@ def processa_arquivo_contratos(file_path:str, skiplines:int=0) -> str:
                             else:
                                 inclusoes += 1
                     else:
-                        logger.debug(f"Conta id_cliente:{contract_data['id_cliente']} não existe no CRM")
+                        logger.debug(f"Conta id_cliente:{contract_data.get('id_cliente_c')} não existe no CRM")
                         sem_ids += 1
-                if row_num % 100 == 0:
-                    logger.info(f"Processados {row_num} registros, Incluidos:{inclusoes} Atualizados:{atualizacoes} Sem IDS:{sem_ids}")
+            if (row_num % 100) == 0:
+                logger.info(f"Processados {row_num} registros, Incluidos:{inclusoes} Atualizados:{atualizacoes} Sem IDS:{sem_ids}")
     logger.info(f"Fim do processamento.{CRLF}{TAB}Processaodos {row_num} registros:{CRLF}{TAB}{TAB}Incluidos:{inclusoes}{CRLF}{TAB}{TAB}Atualizados:{atualizacoes}{CRLF}{TAB}{TAB}Sem IDS:{sem_ids}")
     return f"Processaodos {row_num} registros:{CRLF}{TAB}Incluidos:{inclusoes}{CRLF}{TAB}Atualizados:{atualizacoes}{CRLF}{TAB}Sem IDS:{sem_ids}"
 
