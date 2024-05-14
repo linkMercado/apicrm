@@ -776,8 +776,8 @@ def processa_arquivo_contratos(file_path:str, skiplines:int=0) -> str:
                     crm_contrato = dal_crm.Contract_Get(CRM, name=contract_data['name'])
 
                     # verifica se a conta existe
-                    if contract_data.get('id_cliente_c'):
-                        crm_account = dal_crm.Account_Get(CRM, id_cliente=contract_data['id_cliente_c'])
+                    if contract_data.get('id_cliente'):
+                        crm_account = dal_crm.Account_Get(CRM, id_cliente=contract_data['id_cliente'])
                     else:
                         crm_account = None
 
@@ -797,7 +797,7 @@ def processa_arquivo_contratos(file_path:str, skiplines:int=0) -> str:
                             else:
                                 inclusoes += 1
                     else:
-                        logger.debug(f"Conta id_cliente:{contract_data.get('id_cliente_c')} não existe no CRM")
+                        logger.debug(f"Conta id_cliente:{contract_data.get('id_cliente')} não existe no CRM")
                         sem_ids += 1
             if (row_num % 100) == 0:
                 logger.info(f"Processados {row_num} registros, Incluidos:{inclusoes} Atualizados:{atualizacoes} Sem IDS:{sem_ids}")
