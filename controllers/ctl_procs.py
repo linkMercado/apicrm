@@ -763,8 +763,11 @@ def processa_arquivo_contratos(file_path:str, skiplines:int=0) -> str:
                     for i in range(len(headers)):
                         if headers[i] in ["date_entered","start_date","end_date","customer_signed_date","company_signed_date","renewal_reminder_date","data_cancelamento_c"]:
                             contract_data[headers[i]] = conv_date(dado[i])
-                        elif  headers[i] in ["total_contract_value"]:
-                            contract_data[headers[i]] = dado[i].replace('R$','').replace('.','').replace(',','.')
+                        elif headers[i] in ["total_contract_value"]:
+                            if dado[i].startswith('R$'):
+                                contract_data[headers[i]] = dado[i].replace('R$','').replace('.','').replace(',','.')
+                            else:
+                                contract_data[headers[i]] = dado[i]
                         else:
                             contract_data[headers[i]] = dado[i]
                     contract_data['name'] = contract_data.get('reference_code')
