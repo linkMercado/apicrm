@@ -632,7 +632,6 @@ def Delete(module:str, entity_data:dict) -> bool:
 import csv
 
 def processa_arquivo_contas(file_path:str, skiplines:int=0):
-    msg_resposta:str = ""
     inclusoes = 0
     atualizacoes = 0
     sem_ids = 0
@@ -647,11 +646,12 @@ def processa_arquivo_contas(file_path:str, skiplines:int=0):
         # Loop through each row in the CSV file
         row_num = 0
         for row in csv_reader:
-            if row_num == 0:
+            row_num += 1
+            if row_num == 1:
                 headers = row
                 headers[0] = headers[0].replace('\ufeff', '').replace('"','')
             else:
-                if row_num >= skiplines or row_num > 100:
+                if row_num >= skiplines:
                     dado = row
                     account_data = dict()
                     for i in range(len(headers)):
@@ -659,7 +659,7 @@ def processa_arquivo_contas(file_path:str, skiplines:int=0):
 
                     # Só processa que tem o 'link' completo
                     if not (account_data.get('id_conta_lm_c') and account_data.get('bu_id_c') and account_data.get('id_cliente_c')):
-                        logger.info(f"Falta informação no CSV: id_conta_lm:{account_data.get('id_conta_lm_c')}, buid:{account_data.get('bu_id_c')}, id_cliente:{account_data.get('id_cliente_c')}")
+                        logger.info(f"Falta informação no CSV: linha:{row_num} - id_conta_lm:{account_data.get('id_conta_lm_c')}, buid:{account_data.get('bu_id_c')}, id_cliente:{account_data.get('id_cliente_c')}")
                         sem_ids += 1
                         continue
 
@@ -692,12 +692,6 @@ def processa_arquivo_contas(file_path:str, skiplines:int=0):
                         else:
                             dal_lm.PutSuiteID(r.get('bu_id_c'), r.get('id'))
                             inclusoes += 1
-
-                            # existe um problema que quando a conta é criada, o assigned fica com o CAD_GEN
-                            #dal_crm.Account_Update(CRM, { 'id': r.get('id'), 
-                            #    'users_accounts_1users_ida': r.get('users_accounts_1users_ida'),
-                            #    'assigned_user_id': r.get('assigned_user_id')
-                            #    } )                
                     # se a inclusão/atualização funcionou ...
                     if not s:
                         # acerta o gerente e o representante nas outras contas com o mesmo id_conta_lm
@@ -709,11 +703,13 @@ def processa_arquivo_contas(file_path:str, skiplines:int=0):
                                                             'users_accounts_1users_ida': r.get('users_accounts_1users_ida'),
                                                             'assigned_user_id': r.get('assigned_user_id')
                                                             } )                
-            row_num += 1
+                if row_num % 100 == 0:
+                    logger.info(f"Processados {row_num} registros, Incluidos:{inclusoes} Atualizados:{atualizacoes} Sem IDS:{sem_ids}")
+    logger.info(f"Fim do processamento.{CRLF}{TAB}Processaodos {row_num} registros:{CRLF}{TAB}{TAB}Incluidos:{inclusoes}{CRLF}{TAB}{TAB}Atualizados:{atualizacoes}{CRLF}{TAB}{TAB}Sem IDS:{sem_ids}")
     return f"Processaodos {row_num} registros:{CRLF}{TAB}Incluidos:{inclusoes}{CRLF}{TAB}Atualizados:{atualizacoes}{CRLF}{TAB}Sem IDS:{sem_ids}"
 
 
-def processa_arquivo_contratos(file_path:str, skiplines:int=0):
+def processa_arquivo_contratos(file_path:str, skiplines:int=0) -> str:
     def check_date_format(data:str) -> str:
         pattern = r'^\d{4}-\d{2}-\d{2}$'
         if re.match(pattern, data):
@@ -736,17 +732,17 @@ def processa_arquivo_contratos(file_path:str, skiplines:int=0):
             return datetime.strptime(data, '%d/%m/%Y').date()
         return None
 
-
+    inclusoes = 0
+    atualizacoes = 0
+    sem_ids = 0
+    file_path = "/mnt/shared/crm/" + file_path
     CRM = SuiteCRM.SuiteCRM(logger) 
-    file_path = "/mnt//shared/crm/" + file_path
-    # Open the CSV file in read mode
     with open(file_path, 'r') as file:
-        # Create a CSV reader object
         csv_reader = csv.reader(file)
 
-        # Loop through each row in the CSV file
         row_num = 0
         for row in csv_reader:
+            row_num += 1      
             del row[22]
             del row[21]
             del row[17]
@@ -757,10 +753,9 @@ def processa_arquivo_contratos(file_path:str, skiplines:int=0):
             del row[12]
             del row[7]
             del row[6]
-            if row_num == 0:
+            if row_num == 1:
                 headers = row
                 headers[0] = headers[0].replace('\ufeff', '').replace('"','')
-                # deletar as colunas 1, 6, 12 ,13,14  15, 16*,  17*, 21, 22, 
             else:
                 if row_num >= skiplines:
                     dado = row
@@ -791,13 +786,74 @@ def processa_arquivo_contratos(file_path:str, skiplines:int=0):
                             s, k = dal_crm.Contract_Update(CRM, contract_data)
                             if s:
                                 logger.debug(f"Erro:{s}, Contrato:{contract_data['id']} não foi atualizado. Dados:{contract_data}")
+                            else:
+                                atualizacoes += 1
                         else:
                             s, k = dal_crm.Contract_Create(CRM, contract_data)
                             if s:
                                 logger.debug(f"Erro:{s},Contrato não foi criado. Dados:{contract_data}")
+                            else:
+                                inclusoes += 1
                     else:
                         logger.debug(f"Conta id_cliente:{contract_data['id_cliente']} não existe no CRM")
-            row_num += 1                
+                        sem_ids += 1
+                if row_num % 100 == 0:
+                    logger.info(f"Processados {row_num} registros, Incluidos:{inclusoes} Atualizados:{atualizacoes} Sem IDS:{sem_ids}")
+    logger.info(f"Fim do processamento.{CRLF}{TAB}Processaodos {row_num} registros:{CRLF}{TAB}{TAB}Incluidos:{inclusoes}{CRLF}{TAB}{TAB}Atualizados:{atualizacoes}{CRLF}{TAB}{TAB}Sem IDS:{sem_ids}")
+    return f"Processaodos {row_num} registros:{CRLF}{TAB}Incluidos:{inclusoes}{CRLF}{TAB}Atualizados:{atualizacoes}{CRLF}{TAB}Sem IDS:{sem_ids}"
+
+
+def processa_arquivo_contatos(file_path:str, skiplines:int=0) -> str:
+    inclusoes = 0
+    atualizacoes = 0
+    sem_ids = 0
+    file_path = "/mnt/shared/crm/" + file_path
+    CRM = SuiteCRM.SuiteCRM(logger) 
+    with open(file_path, 'r') as file:
+        csv_reader = csv.reader(file)
+
+        row_num = 0
+        for row in csv_reader:
+            row_num += 1
+            if row_num == 1:
+                headers = row
+                headers[0] = headers[0].replace('\ufeff', '').replace('"','')
+                # "first_name","last_name","titel","email1","cpf_c","phone_mobile","account_name","primary_address_city","primary_address_state","primary_address_country","primary_address_postalcode","primary_address_street","primary_address_street_2","phone_work","lead_source","contatoprincipal_c","tipocontato_c","assigned_user_name"
+            else:
+                if row_num >= skiplines:
+                    dado = row
+                    contact_data = dict()
+                    for i in range(len(headers)):
+                        contact_data[headers[i]] = dado[i]
+
+                    # verifica se a conta existe
+                    if contact_data.get('id_cliente'):
+                        crm_contato = dal_crm.Account_Get(CRM, id_cliente=contact_data['id_cliente'])
+
+                    # se a conta existe, carrega o Contato !
+                    if crm_contato:
+                        contact_data['contact_account_id'] = crm_contato[0].get('id')
+                        crm_contato = dal_crm.Contact_Get(CRM, id_cliente=contact_data['id_cliente'])
+                        if crm_contato:
+                            contact_data['id'] = crm_contato[0].get('id')
+                            s, k = dal_crm.Contact_Update(CRM, contact_data)
+                            if s:
+                                logger.debug(f"Erro:{s}, Contato:{contact_data['id']} não foi atualizado. Dados:{contact_data}")
+                            else:
+                                atualizacoes += 1
+                        else:
+                            s, k = dal_crm.Contact_Create(CRM, contact_data)
+                            if s:
+                                logger.debug(f"Erro:{s},Contato não foi criado. Dados:{contact_data}")
+                            else:
+                                inclusoes += 1
+                    else:
+                        logger.debug(f"Conta id_cliente:{contact_data['id_cliente']} não existe no CRM")
+                        sem_ids += 1
+                if row_num % 100 == 0:
+                    logger.info(f"Processados {row_num} registros, Incluidos:{inclusoes} Atualizados:{atualizacoes} Sem IDS:{sem_ids}")
+    logger.info(f"Fim do processamento.{CRLF}{TAB}Processaodos {row_num} registros:{CRLF}{TAB}{TAB}Incluidos:{inclusoes}{CRLF}{TAB}{TAB}Atualizados:{atualizacoes}{CRLF}{TAB}{TAB}Sem IDS:{sem_ids}")
+    return f"Processaodos {row_num} registros:{CRLF}{TAB}Incluidos:{inclusoes}{CRLF}{TAB}Atualizados:{atualizacoes}{CRLF}{TAB}Sem IDS:{sem_ids}"
 
 
 # processa_arquivo_contas('ImportacaoAccountsSuiteCRM.csv', 720)
