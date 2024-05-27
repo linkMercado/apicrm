@@ -52,16 +52,21 @@ def app_procedures(procedure):
         args = request.args.to_dict()
     else:
         args = request.get_json()
+
+    status=200
     if procedure == "cria_notificacao":
-        try:
-            msg = ctl_procs.cria_notificacao(**args)
-        except Exception as e:
-            msg = f"{e}"
+        msg = ctl_procs.cria_notificacao(**args)
     elif procedure == "processa_arquivo_contas":
         msg = ctl_procs.processa_arquivo_contas(**args)
     elif procedure == "processa_arquivo_contratos":
         msg = ctl_procs.processa_arquivo_contratos(**args)
-    return Response(msg, mimetype='application/json', status=200) 
+    elif procedure == "processa_arquivo_contatos":
+        msg = ctl_procs.processa_arquivo_contatos(**args)
+    else:
+        msg = f"Processo {procedure} não encontrado"
+        status = 404
+
+    return Response(msg, mimetype='application/json', status=status) 
 
 
 @app.route('/crm/<module>', methods=['GET', 'POST', 'PUT', 'DELETE'])

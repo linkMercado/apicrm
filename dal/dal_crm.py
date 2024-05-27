@@ -2,8 +2,9 @@
 # -*- coding: utf-8 -*-
 #
 
+import re
 from apicrm import LOGGER as logger
-
+from apicrm import SUITECRM as SuiteCRM
 
 def Delete(CRM, module:str, entity_data:dict) -> tuple[bool, dict]:
     critica = CRM.critica_parametros(module, 'DELETE', entity_data)
@@ -59,13 +60,13 @@ def Account_Get(CRM, id:str=None, account_id:str=None, buid:str=None, id_cliente
     for r in resp:
         if id and r['id'] == id:
             return resp
-        elif account_id and r['id_conta_lm_c'] != account_id:
+        elif account_id and r['id_conta_lm_c'] != str(account_id):
             continue
-        elif id_cliente and r['id_cliente_c'] != id_cliente:
+        elif id_cliente and r['id_cliente_c'] != str(id_cliente):
             continue
-        elif buid and r['bu_id_c'] != buid:
+        elif buid and r['bu_id_c'] != str(buid):
             continue
-        elif status and r['status_c'] != status:
+        elif status and r['status_c'] != str(status):
             continue
         resposta.append(r)
     return resposta
@@ -101,18 +102,58 @@ def Contact_Get(CRM, id:str=None, name:str=None, email:str=None, document:str=No
         filtro['id'] = id
     if name:
         filtro['name'] = name
+        __name = re.sub('[^a-zA-Z0-9]', '', name)
+    else:
+        __name = None
     if email:
         filtro['email'] = email
+        __email = email
+    else:
+        __email = None
     if document:
         filtro['cpf_c'] = document
+        __document = re.sub('[^0-9]', '', document)
+    else:
+        __document = None
     if phone:
-        filtro['phone_work'] = phone
+        filtro['phone_work'] = SuiteCRM.format_phone(phone)
+        __phone = SuiteCRM.format_phone(phone)
+    else:
+        __phone = None
     if mobile_phone:
         filtro['phone_mobile'] = mobile_phone
+        __mobile_phone = SuiteCRM.format_phone(mobile_phone, internacional=True)
+    else:
+        __mobile_phone = None
     if whatsapp:
         filtro['phone_fax'] = whatsapp
+        __whatsapp = SuiteCRM.format_phone(whatsapp, internacional=True)
+    else:
+        __whatsapp = None
+    
     if filtro:        
-        return CRM.GetData("contacts", filtro=filtro)
+        crm_contatos = CRM.GetData("contacts", filtro=filtro)
+    
+        # se retornou mais de um, qual dos contatos ?
+        _crm_contato = None
+        if crm_contatos and len(crm_contatos) == 1:
+            _crm_contato = crm_contatos[0]
+        else:
+            nota_maxima = 0
+            for crm_contato in crm_contatos if crm_contatos else []:
+                nota = 0
+                nota += 1 if __name and re.sub('[^a-zA-Z0-9]', '', crm_contato.get('name') if crm_contato.get('name') else '') == __name else 0
+                nota += 1 if __email and crm_contato.get('email') == __email else 0
+                nota += 1 if __document and re.sub('[^0-9]', '', crm_contato.get('document') if crm_contato.get('document') else '') == __document else 0
+                nota += 1 if __phone and SuiteCRM.format_phone(crm_contato.get('phone'), internacional=True) == __phone else 0
+                nota += 1 if __mobile_phone and SuiteCRM.format_phone(crm_contato.get('mobile_phone'), internacional=True) == __mobile_phone else 0
+                nota += 1 if __whatsapp and SuiteCRM.format_phone(crm_contato.get('phone_fax'), internacional=True) == __whatsapp else 0
+                if nota > nota_maxima:
+                    nota_maxima = nota
+                    _crm_contato = crm_contato
+        return _crm_contato
+
+
     else:
         return None
 
