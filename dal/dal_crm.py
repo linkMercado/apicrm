@@ -48,11 +48,11 @@ def Account_Get(CRM, id:str=None, account_id:str=None, buid:str=None, id_cliente
     if id:
         filtro['id'] = id
     if account_id:
-        filtro['id_conta_lm_c'] = account_id
+        filtro['id_conta_lm_c'] = str(account_id)
     if id_cliente:
-        filtro['id_cliente_c'] = id_cliente
+        filtro['id_cliente_c'] = str(id_cliente)
     if buid:
-        filtro['bu_id_c'] = buid
+        filtro['bu_id_c'] = str(buid)
     if status:
         filtro['status_c'] = status
     resp = CRM.GetData("accounts", filtro=filtro)
