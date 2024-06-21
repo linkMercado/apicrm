@@ -193,3 +193,18 @@ class Contact(object):
         else:
             cls.tipocontato_c = ['^Usuariobackoffice^']
         return cls
+
+
+class BOConta(object):
+    def _asdict(self):
+        return self.__dict__
+
+    def __init__(self, name, representante_comercial_id, id_conta_lm, gerente_conta_id):
+        self.name = name
+        self.assigned_user_id = representante_comercial_id
+        self.id_conta_lm = id_conta_lm
+        self.users_gcr_contabackoffice_1users_ida = gerente_conta_id
+
+    @classmethod
+    def fromBO(cls, bodata:dict):    
+        return BOConta(bodata['nome_conta_lm'], bodata['RC_id'], bodata['id_conta_lm'], bodata['GC_id'])

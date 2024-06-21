@@ -84,6 +84,13 @@ def Account_Update(CRM, account_data:dict) -> tuple[str,dict]:
     else:
         return "Sem informação", None
 
+def Account_RemoveGrupoSeguranca(CRM, account_id:str, gerente_relacionamento_name:str):
+    if gerente_relacionamento_name:
+        # pega o id do Grupo de Segurança do gerente
+        grupo = CRM.getSecurityGroup(f"Gerente {gerente_relacionamento_name}")
+        #e desassocia
+        _ = CRM.Desassocia(base_module="accounts", base_record_id=account_id, relate_module="security-groups", relate_record_ids=grupo['id'])
+        print(_)
 
 def Account_Delete(CRM, crm_id:str) -> dict:
     if crm_id:
@@ -208,6 +215,12 @@ def Ticket_Create(CRM, ticket_data:dict) -> tuple[str,dict]:
     else:
         return "Sem informação", None
 
+
+def ContaBO_Update(CRM, contaBO_data:dict) -> tuple[str,dict]:
+    if contaBO_data:
+        return CRM.PutData("GCR_ContaBackoffice", parametros=contaBO_data)
+    else:
+        return "Sem informação", None
 
 def Associa_contatos(CRM, crm_account_id:str, crm_contact_ids:str) -> bool:
     return CRM.AssociateData("accounts", base_record_id=crm_account_id, relate_module="contacts", relate_record_ids=crm_contact_ids)

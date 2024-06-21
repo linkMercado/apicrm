@@ -1,6 +1,7 @@
 import re
-from datetime import date, datetime, timedelta
+import csv
 
+from datetime import date, datetime
 from apicrm import LOGGER as logger
 from apicrm import SUITECRM as SuiteCRM 
 from lm_packages.Extras import TAB, CRLF
@@ -422,6 +423,75 @@ def sync_CRM2BO_Account() -> tuple[str: dict]:
     return resp, suite_ids
 
 
+def sync_BOContas_comLM(id_conta_lm:str=None) -> list:
+    # não pode ser usada
+    # só serve para criar
+    return list()
+    suite_ids = list()
+    CRM = SuiteCRM.SuiteCRM(logger)
+    BOContas = dal_lm.GetBOContas(id_conta_lm)
+    # 393739
+    #ww = CRM.GetData("GCR_ContaBackoffice", { 'id': '26c5bfb9-049a-f601-d309-6668336f5735' })
+    for BOConta in BOContas:
+        BOConta_data = mod_crm.BOConta().fromBO(BOConta).__dict__
+        s, crm = CRM.PostData("GCR_ContaBackoffice", BOConta_data)
+        if not s and crm:
+            for acc_id in BOConta['crm_accounts'].split(','):
+                r = CRM.AssociateData("GCR_ContaBackoffice", base_record_id=crm['id'], relate_module="accounts", relate_record_ids=acc_id)
+                if not r:
+                    print(crm['id'], acc_id)
+                else:
+                    suite_ids.append(crm.get('id'))                    
+        print('id_conta_lm', BOConta['id_conta_lm'])                
+    return suite_ids
+
+def sync_BOContas_Accounts() -> None:
+    CRM = SuiteCRM.SuiteCRM(logger)
+
+    # pega todas as BOAccounts
+    s, BOContas = dal_crm.Get(CRM, module="GCR_ContaBackoffice", filtro=dict())
+    if s:
+        for BOConta in BOContas.get('data',[]):
+            BO_account_id = BOConta['id']
+            # pega todas as contas com o mesmo id_conta_lm
+            crm_accounts = dal_crm.Account_Get(CRM,account_id=BOConta.get('id_conta_lm'))
+
+            # e associa ao BOAccount
+            for crm_account in crm_accounts:
+                acc_id = crm_account['id']
+                _ = CRM.AssociateData("GCR_ContaBackoffice", base_record_id=BO_account_id, relate_module="accounts", relate_record_ids=acc_id)
+                print('.', end='')
+    print()
+
+
+def sync_BOContas_Contracts() -> None:
+    CRM = SuiteCRM.SuiteCRM(logger)
+
+    idLM_Contracts = dal_lm.GetCRMIdContaLM_Contracts()
+    for idLM_Contract in idLM_Contracts:
+        s, BOConta = dal_crm.Get(CRM, module="GCR_ContaBackoffice", filtro={'id_conta_lm':idLM_Contract['id_conta_lm_c']})
+        if s and BOConta and len(BOConta.get('data',[])) > 0:
+            BOConta_id = BOConta['data'][0]['id']
+            for crm_contract_id in idLM_Contract['contract_id_list'].split(','):
+                _ = CRM.AssociateData("GCR_ContaBackoffice", base_record_id=BOConta_id, relate_module="contracts", relate_record_ids=crm_contract_id)
+                print('.', end='')
+    print()
+
+def sync_BOContas_Contacts() -> None:
+    CRM = SuiteCRM.SuiteCRM(logger)
+
+    idLM_Contacts = dal_lm.GetCRMIdContaLM_Contacts()
+    for idLM_Contact in idLM_Contacts:
+        s, BOConta = dal_crm.Get(CRM, module="GCR_ContaBackoffice", filtro={'id_conta_lm':idLM_Contact['id_conta_lm']})
+        if s and BOConta and len(BOConta.get('data',[])) > 0:
+            BOConta_id = BOConta['data'][0]['id']
+            for crm_contact_id in idLM_Contact['contact_id_list'].split(','):
+                _ = CRM.AssociateData("GCR_ContaBackoffice", base_record_id=BOConta_id, relate_module="contacts", relate_record_ids=crm_contact_id)
+                print('.', end='')
+    print()
+
+
+
 def trata_contatos(CRM, suite_id:str, contatos:list=list()) -> dict:
     def GetContato(k):
         __name = k.get('nome') if k.get('nome') else k.get('name')
@@ -593,8 +663,6 @@ def Delete(module:str, entity_data:dict) -> bool:
     return dal_crm.Delete(CRM, module=module, entity_data=entity_data)
 
 
-import csv
-
 def processa_arquivo_contas(file_path:str, skiplines:int=0):
     inclusoes = 0
     atualizacoes = 0
@@ -618,6 +686,7 @@ def processa_arquivo_contas(file_path:str, skiplines:int=0):
                 logger.info(f"Header carregado:{headers}")
             else:
                 if row_num >= skiplines:
+                    print(row_num)
                     dado = row
                     if len(dado) != len(headers):
                         logger.info(f"linha:{row_num} - Quantidade de campos:{len(dado)} desta linha difere do header:{len(headers)}")
@@ -626,15 +695,24 @@ def processa_arquivo_contas(file_path:str, skiplines:int=0):
 
                     account_data = dict()
                     for i in range(len(headers)):
-                        account_data[headers[i]] = dado[i]
+                        if headers[i] == 'assigned_user_name':
+                            account_data[headers[i]] = dado[i].upper()
+                        else:    
+                            account_data[headers[i]] = dado[i]
 
                     # Só processa que tem o 'link' completo
-                    if not (account_data.get('id_conta_lm_c') and account_data.get('bu_id_c') and (account_data.get('id_cliente_c') or account_data.get('id_cliente') )) :
+                    if not (account_data.get('id_conta_lm_c') \
+                            # and account_data.get('bu_id_c') \
+                            and (account_data.get('id_cliente_c') or account_data.get('id_cliente')) ) :
                         logger.info(f"linha:{row_num} - Falta informação no CSV: id_conta_lm:{account_data.get('id_conta_lm_c')}, buid:{account_data.get('bu_id_c')}, id_cliente:{account_data.get('id_cliente_c')}")
                         sem_ids += 1
                         continue
 
-                    #pega todas as contas com o mesmo id_conta_lm
+                    # pula a deleção
+                    if account_data.get('id_cliente_c') == 'D':
+                        continue
+
+                    # pega todas as contas com o mesmo id_conta_lm
                     contas_mesmo_id_conta_lm = dal_crm.Account_Get(CRM, account_id=account_data.get('id_conta_lm_c'))
 
                     # pega o id_cliente
@@ -647,12 +725,12 @@ def processa_arquivo_contas(file_path:str, skiplines:int=0):
                         if len(crm_accounts) == 1:
                             # indica o ID para atualizar
                             account_data['id'] = crm_accounts[0].get('id')
-                            s, r = dal_crm.Account_Update(CRM, account_data )
+                            s, crm_account = dal_crm.Account_Update(CRM, account_data )
                             if s:
                                 logger.info(f"linha:{row_num} - Conta:{account_data['id']} não foi atualizada. Erro:{s}.")
                             else:
                                 atualizacoes += 1
-                                dal_lm.PutSuiteID(r.get('bu_id_c'), r.get('id'))
+                                dal_lm.PutSuiteID(crm_account.get('bu_id_c'), crm_account.get('id'))
                         else:
                             logger.critical(f"linha:{row_num} - Multiplas contas com essa chave: id_conta_lm:{account_data.get('id_conta_lm_c')}, bu_id:{account_data.get('bu_id_c')}, id_cliente:{account_data.get('id_cliente_c')}")
                             s = "ERRO - MULTIPLAS CONTAS"
@@ -661,24 +739,49 @@ def processa_arquivo_contas(file_path:str, skiplines:int=0):
                         # conta não existe no CRM
                         if contas_mesmo_id_conta_lm and len(contas_mesmo_id_conta_lm) > 0:
                             account_data['parent_id'] = contas_mesmo_id_conta_lm[0].get('parent_id')
-                        s, r = dal_crm.Account_Create(CRM, account_data)
+                        s, crm_account = dal_crm.Account_Create(CRM, account_data)
                         # se criou e existe, acertar o 'link' no BO
                         if s:
                             logger.info(f"linha:{row_num} - Conta não foi criada. Erro:{s}, Dados:{account_data}")
                         else:
-                            dal_lm.PutSuiteID(r.get('bu_id_c'), r.get('id'))
+                            dal_lm.PutSuiteID(crm_account.get('bu_id_c'), crm_account.get('id'))
                             inclusoes += 1
-                    # se a inclusão/atualização funcionou ...
+                    # se a inclusão/atualizaçãofuncionou ...
                     if not s:
-                        # acerta o gerente e o representante nas outras contas com o mesmo id_conta_lm
-                        if contas_mesmo_id_conta_lm and len(contas_mesmo_id_conta_lm) > 0:
-                            for conta_mesmo_id_conta_lm in contas_mesmo_id_conta_lm:
-                                # não atualiza o que fá foi atualizado
-                                if r.get('id') != conta_mesmo_id_conta_lm.get('id'):
-                                    dal_crm.Account_Update(CRM, { 'id': conta_mesmo_id_conta_lm.get('id'), 
-                                                            'users_accounts_1users_ida': r.get('users_accounts_1users_ida'),
-                                                            'assigned_user_id': r.get('assigned_user_id')
-                                                            } )                
+                        # BOAccounts existe ?
+                        BOAccount = CRM.get_BOconta(id_conta_lm=crm_account['id_conta_lm_c'])
+                        if not BOAccount:
+                            # cria o BOAccount
+                            s, BOAccount = CRM.cria_BOconta(name=crm_account.get('name'), 
+                                                            id_conta_lm=crm_account.get('id_conta_lm_c'), 
+                                                            assigned_user_id=crm_account.get('assigned_user_id'), 
+                                                            gerente_relacionamento_id=crm_account.get('users_accounts_1users_ida'), 
+                                                            account_ids=crm_account['id'] )
+                        else:
+                            # testa se alterou o RC ou o GC
+                            atualizaRC = BOAccount[0].get('assigned_user_id') != crm_account.get('assigned_user_id')
+                            atualizaGC = BOAccount[0].get('users_gcr_contabackoffice_1users_ida') != crm_account.get('users_accounts_1users_ida')
+                            if atualizaRC or atualizaGC:
+                                s, _ = dal_crm.ContaBO_Update(CRM, {'id':BOAccount[0]['id'], 
+                                                                    'assigned_user_id': crm_account.get('assigned_user_id'), 
+                                                                    'gerente_relacionamento_id': crm_account.get('users_accounts_1users_ida'), 
+                                                                    'account_ids': crm_account['id']} )
+                                # acerta o gerente e o representante nas outras contas com o mesmo id_conta_lm
+                                if contas_mesmo_id_conta_lm and len(contas_mesmo_id_conta_lm) > 0:
+                                    for conta_mesmo_id_conta_lm in contas_mesmo_id_conta_lm:
+                                        if atualizaGC:
+                                            dal_crm.Account_RemoveGrupoSeguranca(CRM, conta_mesmo_id_conta_lm.get('id'), conta_mesmo_id_conta_lm.get('users_accounts_1_name',{}).get('name'))
+                                        # não atualiza o que já foi atualizado
+                                        if crm_account.get('id') != conta_mesmo_id_conta_lm.get('id'):
+                                            dal_crm.Account_Update(CRM, { 
+                                                                          'id': conta_mesmo_id_conta_lm.get('id'),
+                                                                          'users_accounts_1users_ida': crm_account.get('users_accounts_1users_ida'),
+                                                                          'assigned_user_id': crm_account.get('assigned_user_id')
+                                                                        } 
+                                                                   )
+                            else:
+                                # só inclui
+                                _ = CRM.AssociateData("GCR_ContaBackoffice", base_record_id=BOAccount[0]['id'], relate_module="accounts", relate_record_ids=crm_account['id'])
                 if row_num % 50 == 0:
                     logger.info(f"Processados {row_num} registros, Incluidos:{inclusoes} Atualizados:{atualizacoes} Sem IDS:{sem_ids} Formatação incorreta:{formatacao}")
     logger.info(f"Fim do processamento.{CRLF}{TAB}Processados {row_num} registros:{CRLF}{TAB}{TAB}Incluidos:{inclusoes}{CRLF}{TAB}{TAB}Atualizados:{atualizacoes}{CRLF}{TAB}{TAB}Sem IDS:{sem_ids}{CRLF}{TAB}{TAB}Formatação incorreta:{formatacao}")

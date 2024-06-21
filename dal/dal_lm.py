@@ -220,3 +220,70 @@ def GetContatos():
     respContato = mysql_pool.execute(cmd, cursor_args={"buffered": True, "dictionary": True}, commit=False)
     return respContato
 
+def GetBOContas(id_conta_lm:int=None):
+    if id_conta_lm:
+        where = f" AND l_a.id >= {id_conta_lm} "
+    else:
+        where = ""
+    cmd = f"""
+            SELECT l_a.id id_conta_lm
+            , l_a.name nome_conta_lm
+            , GROUP_CONCAT(bu.suite_id SEPARATOR ',') crm_accounts
+            , GROUP_CONCAT(distinct a2.users_accounts_1users_ida SEPARATOR ',') GC_id
+            , GROUP_CONCAT(distinct a.assigned_user_id  SEPARATOR ',') RC_id
+            FROM suitecrm.accounts a
+            JOIN suitecrm.accounts_cstm a1
+                ON a1.id_c = a.id
+            left outer JOIN suitecrm.users_accounts_1_c a2
+                ON a2.users_accounts_1accounts_idb = a.id	
+            JOIN linkmercado.core_accounts l_a
+                ON l_a.id = a1.id_conta_lm_c
+            JOIN linkmercado.core_business_units bu
+                ON bu.account_id = l_a.id	
+            WHERE a.deleted = 0 
+                AND a1.id_conta_lm_c > 0
+                AND bu.`status` = 0
+                AND a2.deleted = 0
+                {where}
+            GROUP BY l_a.id, l_a.name	
+            ORDER BY 1
+        """
+    respBOContas = mysql_pool.execute(cmd, cursor_args={"buffered": True, "dictionary": True}, commit=False)
+    return respBOContas
+
+def GetCRMIdContaLM_Contracts() -> dict:
+    cmd = f"""
+            SELECT ax.id_conta_lm_c, group_concat(cc.id SEPARATOR ',') contract_id_list
+            FROM suitecrm.aos_contracts cc
+            JOIN suitecrm.aos_contracts_cstm	cx
+                ON cx.id_c = cc.id
+            JOIN suitecrm.accounts aa
+                ON aa.id = cc.contract_account_id
+            JOIN suitecrm.accounts_cstm ax
+                ON ax.id_c = aa.id	
+                WHERE cc.deleted = 0  AND ax.id_conta_lm_c IS NOT null
+                AND aa.deleted = 0
+            GROUP BY ax.id_conta_lm_c	
+            ORDER BY 1
+        """
+    resp = mysql_pool.execute(cmd, cursor_args={"buffered": True, "dictionary": True}, commit=False)
+    return resp
+
+
+def GetCRMIdContaLM_Contacts() -> dict:
+    cmd = f"""
+            SELECT gc.id_conta_lm, GROUP_CONCAT(distinct ac.contact_id SEPARATOR ',') contact_id_list
+            FROM suitecrm.gcr_contabackoffice gc
+            JOIN suitecrm.accounts_cstm ax
+                ON ax.id_conta_lm_c = gc.id_conta_lm
+            JOIN suitecrm.accounts aa
+                ON aa.id = ax.id_c
+            JOIN suitecrm.accounts_contacts ac
+                ON ac.account_id = aa.id
+            WHERE aa.deleted = 0 AND gc.deleted = 0 AND ac.deleted = 0 
+            and gc.id_conta_lm >= 2091921
+            GROUP BY gc.id_conta_lm
+            ORDER BY 1
+        """
+    resp = mysql_pool.execute(cmd, cursor_args={"buffered": True, "dictionary": True}, commit=False)
+    return resp
