@@ -92,7 +92,7 @@ def Account_RemoveGrupoSeguranca(CRM, account_id:str, gerente_relacionamento_nam
         _ = CRM.Desassocia(base_module="accounts", base_record_id=account_id, relate_module="security-groups", relate_record_ids=grupo['id'])
         print(_)
 
-def Account_Delete(CRM, crm_id:str) -> dict:
+def Account_Delete(CRM, crm_id:str) -> bool:
     if crm_id:
         return CRM.DeleteData("accounts", parametros={'id':crm_id})
     else:

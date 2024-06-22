@@ -708,16 +708,29 @@ def processa_arquivo_contas(file_path:str, skiplines:int=0):
                         sem_ids += 1
                         continue
 
-                    # pula a deleção
-                    if account_data.get('id_cliente_c') == 'D':
-                        continue
-
-                    # pega todas as contas com o mesmo id_conta_lm
-                    contas_mesmo_id_conta_lm = dal_crm.Account_Get(CRM, account_id=account_data.get('id_conta_lm_c'))
-
                     # pega o id_cliente
                     if (_idc1:=account_data.get('id_cliente_c')) or (_idc2:=account_data.get('id_cliente')):
                         _id_cliente = _idc1 if _idc1 else _idc2
+
+                    # é para deletar ?
+                    if account_data.get('status') == 'D':
+                        crm_accounts = dal_crm.Account_Get(CRM, id_cliente=_id_cliente)
+                        if crm_accounts and len(crm_accounts) >= 1:
+                            if len(crm_accounts) == 1:
+                                # deleta a conta
+                                deletou = dal_crm.Account_Delete(CRM, crm_accounts[0]['id'])
+                                if deletou:
+                                    logger.info(f"linha:{row_num} - Account {crm_accounts[0]['id']} deletado do CRM.")
+                                else:
+                                    logger.critical(f"linha:{row_num} - Problemas pata deletar o account {crm_accounts[0]['id']}")
+                            elif len(crm_accounts) > 1:
+                                logger.critical(f"linha:{row_num} - Multiplas contas com id_cliente:{_id_cliente}")
+                            else:
+                                logger.critical(f"linha:{row_num} - Conta com id_cliente:{_id_cliente} não localizado no CRM !")
+                        continue
+                    continue
+                    # pega todas as contas com o mesmo id_conta_lm
+                    contas_mesmo_id_conta_lm = dal_crm.Account_Get(CRM, account_id=account_data.get('id_conta_lm_c'))
 
                     # conta existe ?
                     crm_accounts = dal_crm.Account_Get(CRM, account_id=account_data.get('id_conta_lm_c'), buid=account_data.get('bu_id_c'), id_cliente=_id_cliente)
