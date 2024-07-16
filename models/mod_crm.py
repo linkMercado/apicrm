@@ -12,7 +12,7 @@ class Account(object):
         pass
 
     @staticmethod
-    def __endereco(street_type, street, house_number, additional_address):
+    def _endereco(street_type, street, house_number, additional_address):
         end = ''
         if street_type:
             end += street_type + ' '
@@ -35,19 +35,19 @@ class Account(object):
         cls.modified_user_id = API_GEN_UserID
         cls.status_c = 'Ativo' if budata.get('status') == 0 else 'Inativo'
 
-        if budata.get('id'): cls.bu_id_c = budata.get('id')
+        if budata.get('bu_id'): cls.bu_id_c = budata.get('bu_id')
         if budata.get('account_id'): cls.id_conta_lm_c = budata.get('account_id')
         if budata.get('id_cliente'): cls.id_cliente_c = budata.get('id_cliente')
 
-        if budata.get('corporate_name'): cls.name = budata.get('corporate_name')
-        if budata.get('nome_fantasia'): cls.nome_fantasia_c = budata.get('nome_fantasia')
+
+        if budata.get('nome_fantasia'): cls.name = budata.get('nome_fantasia')
+        if budata.get('corporate_name'): cls.razao_social_c = budata.get('corporate_name')
 
         doc = budata.get('cnpj')
         if doc is None: doc = budata.get('cpf')
         if doc: cls.documento_cliente_c = doc
-        # assigned_user_name: user_name do colaborador
 
-        _endereco = Account.__endereco(budata.get('street_type'), budata.get('street'), budata.get('house_number'), budata.get('additional_address'))
+        _endereco = Account._endereco(budata.get('street_type'), budata.get('street'), budata.get('house_number'), budata.get('additional_address'))
         if _endereco:
             cls.billing_address_street = _endereco
             if budata.get('state'): cls.billing_address_country = "Brasil"
@@ -106,11 +106,6 @@ class Account(object):
             _emails = emails.split('|')
             if len(_emails) > 0:
                 cls.email_address = _emails[0]
-
-        # colaboradores = budata.get('colaboradores')
-        # if colaboradores:
-        #    colab = ', '.join(colaboradores.split('|'))
-        #    self.employees = colab
         return cls
     
 

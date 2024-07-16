@@ -10,9 +10,15 @@ def getPoolInfo():
     return mysql_pool.getPoolInfo()
 
 
-def GetAccountBUs(accountid:str) -> dict:
+def GetBUs(accountid:str) -> dict:
     if accountid:
-        cmd = f"""SELECT bu.*
+        cmd = f"""SELECT
+                  SUBSTRING_INDEX(fk.fk,'_',1) id_cliente
+                , sx.contract_number
+                , bu.status
+                , SUBSTRING_INDEX(SUBSTRING_INDEX(fk.fk,'_',2),'_',-1) contrato_expandido
+                , bu.id bu_id
+                , bu.corporate_name, bu.cpf, bu.cnpj, bu.account_id, bu.suite_id
                 , s.name state 
                 , c.name city
                 , ifnull(d.name,'') bairro
@@ -32,10 +38,8 @@ def GetAccountBUs(accountid:str) -> dict:
                 , bi.youtube
                 , bi.tiktok
                 , case when bi.url LIKE '%telelistas.com.br%' then '' else replace(replace(bi.url,'http://',''),'https://','') END website
-                , SUBSTRING_INDEX(fk.fk,'_',1) id_cliente
-                , GROUP_CONCAT( CONCAT(ph.phone_type_id,'-',ph.area_code,'-',ph.number)  ORDER BY ph.sort_order SEPARATOR '|' ) phones
-                , GROUP_CONCAT( em.address order BY  em.id  SEPARATOR '|') emails
-                , GROUP_CONCAT( u.email SEPARATOR '|') colaboradores
+                , GROUP_CONCAT( DISTINCT CONCAT(ph.phone_type_id,'-',ph.area_code,'-',ph.number)  ORDER BY ph.sort_order SEPARATOR '|' ) phones
+                , GROUP_CONCAT( DISTINCT em.address order BY  em.id  SEPARATOR '|') emails
                 FROM linkmercado.core_business_units bu
                 JOIN linkmercado.core_addresses ad
                     ON ad.business_unit_id = bu.id
@@ -58,10 +62,8 @@ def GetAccountBUs(accountid:str) -> dict:
                     AND ph.publishable = 1
                 LEFT OUTER JOIN linkmercado.core_emails em
                     ON em.business_info_id = bi.id
-                left OUTER join linkmercado.backoffice_account_managers am
-                    ON am.account_id = bu.account_id
-                left outer JOIN linkmercado.backoffice_users u
-                    ON u.id = am.user_id
+                LEFT OUTER JOIN products_contracts.subscriptions sx
+                    ON sx.business_unit_id = bu.id AND sx.status = 0
                 WHERE bu.account_id = '{accountid}'
                 GROUP BY bu.id
                 ORDER BY bu.status ASC, fk.priority DESC"""

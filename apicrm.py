@@ -62,52 +62,13 @@ def app_procedures(procedure):
         msg = ctl_procs.processa_arquivo_contratos(**args)
     elif procedure == "processa_arquivo_contatos":
         msg = ctl_procs.processa_arquivo_contatos(**args)
+    elif procedure == "deleta_contratos":
+        msg = ctl_procs.processa_arquivo_deleta_contratos(**args)
     else:
         msg = f"Processo {procedure} não encontrado"
         status = 404
 
     return Response(msg, mimetype='application/json', status=status) 
-
-
-@app.route('/crm/<module>', methods=['GET', 'POST', 'PUT', 'DELETE'])
-@logar
-def app_crm(module):
-    if request.method == 'GET':
-        args = request.args.to_dict()
-        if not args:
-            args = request.get_json()
-    else:
-        args = request.get_json()
-
-    resp_status = 200
-    if request.method == 'GET':
-        s, d = ctl_procs.Get(module, filtro=args)
-        if s:
-            resp = {'status': 'OK', 'data': d.get('data') }
-        else:
-            resp = {'status': 'ERRO', 'msg': d.get('msg') }
-    elif request.method == 'POST':
-        s, d = ctl_procs.Post(module, entity_data=args)
-        if s:
-            resp = {'status': 'OK', 'data': d.get('data') }
-        else:
-            resp = {'status': 'ERRO', 'msg': d.get('msg') }
-    elif request.method == 'PUT':
-        s, d = ctl_procs.Put(module, entity_data=args)
-        if s:
-            resp = {'status': 'OK', 'data': d.get('data') }
-        else:
-            resp = {'status': 'ERRO', 'msg': d.get('msg') }
-    elif request.method == 'DELETE':
-        s, d = ctl_procs.Delete(module, entity_data=args)
-        if s:
-            resp = {'status': 'OK'}
-        else:
-            resp = {'status': 'ERRO', 'msg': d.get('msg') }
-    else:
-        resp = {'status': 'ERRO', 'msg': f'método {request.method} não suportado' }
-        resp_status = 500
-    return Response(json.dumps(resp, default=DefaultConv), mimetype='application/json', status=resp_status) 
 
 
 @app.after_request
@@ -129,10 +90,41 @@ def after_request_func(response: Response) -> Response:
     return response
 
 
-@app.route('/crm/sync/account', methods=[ 'GET', 'POST', 'PUT'])
+@app.route('/crm/sync/<module>', methods=[ 'GET', 'POST', 'PUT'])
 @cross_origin(origin='*',headers=['Content-Type','Authorization'])
 @logar
-def app_sync():
+def app_sync_module(module:str):
+    if request.method == 'GET':
+        args = request.args.to_dict()
+        args - None
+        resp_status = 400
+        msg = "Metodo não implementado"
+    elif request.method in ['POST', 'PUT']:
+        args = request.get_json()
+    else:
+        args = None
+        resp_status = 400
+        msg = "Método não implementado"
+
+    if args:
+        if module in ['account', 'bu']:
+            resp_status = 200
+            msg = ctl_procs.sync_bu(account_data=args)
+        elif module in ['contract', 'contrato']:
+            resp_status = 200
+            msg = ctl_procs.sync_contract(contract_data=args)
+        elif module in ['contact', 'contato']:
+            resp_status = 200
+            msg = ctl_procs.sync_contact(contract_data=args)
+
+    LOGGER.debug(f"sync_{module}, s:{resp_status} m:{msg}")
+    return Response(msg, status=resp_status) 
+
+
+@app.route('/crm/sync/xaccount', methods=[ 'GET', 'POST', 'PUT'])
+@cross_origin(origin='*',headers=['Content-Type','Authorization'])
+@logar
+def app_sync_account():
     if request.method == 'GET':
         args = request.args.to_dict()
     else:
@@ -164,6 +156,31 @@ def app_sync():
         resp_status = 400
     LOGGER.debug(f"s:{resp_status} m:{resp}")
     return Response(json.dumps(resp, default=DefaultConv), mimetype='application/json', status=resp_status) 
+
+
+@app.route('/crm/sync/xcontract', methods=['POST', 'PUT'])
+@cross_origin(origin='*',headers=['Content-Type','Authorization'])
+@logar
+def app_sync_contract():
+    if request.method == 'GET':
+        args = request.args.to_dict()
+        args - None
+        resp_status = 400
+        msg = "Metodo não implementado"
+    elif request.method in ['POST', 'PUT']:
+        args = request.get_json()
+    else:
+        args = None
+        resp_status = 400
+        msg = "Método não implementado"
+    if args:
+        resp_status = 200
+        msg = ctl_procs.sync_contract(contract_data=args)
+    else:
+        resp_status = 400
+        msg = 'Erro: chamada sem body'
+    LOGGER.debug(f"s:{resp_status} m:{msg}")
+    return Response(msg, mimetype='application/text', status=resp_status) 
 
 
 @app.route('/crm/notification', methods=['POST'])
@@ -215,6 +232,47 @@ def app_notification():
         resp_status = 200 if _resp else 400
 
     LOGGER.debug(f"s:{resp_status} m:{resp}")
+    return Response(json.dumps(resp, default=DefaultConv), mimetype='application/json', status=resp_status) 
+
+
+@app.route('/crm/<module>', methods=['GET', 'POST', 'PUT', 'DELETE'])
+@logar
+def app_crm(module):
+    if request.method == 'GET':
+        args = request.args.to_dict()
+        if not args:
+            args = request.get_json()
+    else:
+        args = request.get_json()
+
+    resp_status = 200
+    if request.method == 'GET':
+        s, d = ctl_procs.Get(module, filtro=args)
+        if s:
+            resp = {'status': 'OK', 'data': d.get('data') }
+        else:
+            resp = {'status': 'ERRO', 'msg': d.get('msg') }
+    elif request.method == 'POST':
+        s, d = ctl_procs.Post(module, entity_data=args)
+        if s:
+            resp = {'status': 'OK', 'data': d.get('data') }
+        else:
+            resp = {'status': 'ERRO', 'msg': d.get('msg') }
+    elif request.method == 'PUT':
+        s, d = ctl_procs.Put(module, entity_data=args)
+        if s:
+            resp = {'status': 'OK', 'data': d.get('data') }
+        else:
+            resp = {'status': 'ERRO', 'msg': d.get('msg') }
+    elif request.method == 'DELETE':
+        s, d = ctl_procs.Delete(module, entity_data=args)
+        if s:
+            resp = {'status': 'OK'}
+        else:
+            resp = {'status': 'ERRO', 'msg': d.get('msg') }
+    else:
+        resp = {'status': 'ERRO', 'msg': f'método {request.method} não suportado' }
+        resp_status = 500
     return Response(json.dumps(resp, default=DefaultConv), mimetype='application/json', status=resp_status) 
 
 
