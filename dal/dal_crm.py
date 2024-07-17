@@ -6,7 +6,7 @@ import re
 from apicrm import LOGGER as logger
 from apicrm import SUITECRM as SuiteCRM
 
-def Delete(CRM:SuiteCRM.SuiteCRM, module:str, entity_data:dict) -> tuple[bool, dict]:
+def DeleteObject(CRM:SuiteCRM.SuiteCRM, module:str, entity_data:dict) -> tuple[bool, dict]:
     critica = CRM.critica_parametros(module, 'DELETE', entity_data)
     if critica:
         return False, { 'msg': critica }
@@ -14,7 +14,7 @@ def Delete(CRM:SuiteCRM.SuiteCRM, module:str, entity_data:dict) -> tuple[bool, d
     return d, { 'msg': None } if d else { 'msg': 'Erro' }
 
 
-def Post(CRM:SuiteCRM.SuiteCRM, module:str, entity_data:dict) -> tuple[bool, dict]:
+def PostObject(CRM:SuiteCRM.SuiteCRM, module:str, entity_data:dict) -> tuple[bool, dict]:
     critica = CRM.critica_parametros(module, 'POST', entity_data)
     if critica:
         return False, { 'msg': critica }
@@ -25,7 +25,7 @@ def Post(CRM:SuiteCRM.SuiteCRM, module:str, entity_data:dict) -> tuple[bool, dic
     return False, { 'msg':'ERRO !' }
 
 
-def Put(CRM:SuiteCRM.SuiteCRM, module:str, entity_data:dict) -> tuple[bool, dict]:
+def PutObject(CRM:SuiteCRM.SuiteCRM, module:str, entity_data:dict) -> tuple[bool, dict]:
     critica = CRM.critica_parametros(module, 'PUT', entity_data)
     if critica:
         return False, { 'msg': critica }
@@ -36,7 +36,7 @@ def Put(CRM:SuiteCRM.SuiteCRM, module:str, entity_data:dict) -> tuple[bool, dict
     return False, { 'msg':'ERRO !' }
 
 
-def Get(CRM:SuiteCRM.SuiteCRM, module:str, filtro:dict=dict()) -> tuple[bool, dict]:
+def GetObject(CRM:SuiteCRM.SuiteCRM, module:str, filtro:dict=dict()) -> tuple[bool, dict]:
     critica = CRM.critica_parametros(module, 'GET', filtro)
     if critica:
         return False, { 'msg': critica }
@@ -121,7 +121,7 @@ def Account_Delete(CRM:SuiteCRM.SuiteCRM, crm_id:str) -> bool:
 
 
 def Account_getContacts(CRM:SuiteCRM.SuiteCRM, account_id:str):
-    contacts = CRM.get_contaContacts(account_id)
+    contacts = CRM.GetSubPanelData(parentModule="accounts", parentId=account_id, module="contacts", subpanel="contacts")
     if contacts and len(contacts) > 0:
         return contacts
     else:
@@ -129,7 +129,23 @@ def Account_getContacts(CRM:SuiteCRM.SuiteCRM, account_id:str):
 
 
 def User_Get(CRM:SuiteCRM.SuiteCRM, id:str=None, username:str=None, email:str=None) -> dict:
-    return CRM.getColaborador(id=id, username=username, email=email)
+    if username:
+        if '.' in username:
+            filtro = {"user_name": username}
+        elif username == username.upper():
+            filtro = {"usercorp_c": username}
+        else:
+            filtro = {"name": username}
+    if email:
+        filtro = {"userlm_c": email}
+    if id:
+        filtro = {"id": id}
+
+    usuarios = CRM.GetData("users", filtro)
+    if len(usuarios) > 0:
+        return usuarios
+    else:
+        return None
 
 
 def Contact_Get(CRM:SuiteCRM.SuiteCRM, id:str=None, fname:str=None, lname:str=None, email:str=None, document:str=None, phone_work:str=None, mobile_phone:str=None, whatsapp:str=None) -> list[dict]:
@@ -324,9 +340,8 @@ def Contract_Delete(CRM:SuiteCRM.SuiteCRM, crm_id:str=None, numero:str=None) -> 
     return False
 
 
-def Cria_contato(CRM:SuiteCRM.SuiteCRM, parametros) -> tuple[str,dict]:
-    return CRM.cria_contato(**parametros)
-
+def Contract_AssociaAccounts(CRM:SuiteCRM.SuiteCRM, crm_contract_id:str, crm_account_id:str) -> bool:
+    return CRM.AssociateData("contracts", base_record_id=crm_contract_id, relate_module="accounts", relate_record_ids=crm_account_id)
 
 def Ticket_Create(CRM:SuiteCRM.SuiteCRM, ticket_data:dict) -> tuple[str,dict]:
     if ticket_data:
@@ -351,6 +366,11 @@ def BOAccount_Get(CRM:SuiteCRM.SuiteCRM, id_conta_lm:str) -> tuple[str,dict]:
     else:
         return "Sem informação", None
 
+def BOAccount_Create(CRM:SuiteCRM.SuiteCRM, boaccount_data:dict) -> tuple[str,dict]:
+    if boaccount_data:
+        return CRM.PostData("GCR_ContaBackoffice", parametros=boaccount_data)
+    else:
+        return "Sem informação", None
 
 def BOAccount_Update(CRM:SuiteCRM.SuiteCRM, contaBO_data:dict) -> tuple[str,dict]:
     if contaBO_data:
@@ -365,16 +385,14 @@ def BOAccount_RemoveGrupoSeguranca(CRM:SuiteCRM.SuiteCRM, bo_account_id:str, gru
             _ = CRM.Desassocia(base_module="GCR_ContaBackoffice", base_record_id=bo_account_id, relate_module="security-groups", relate_record_id=sec_g)
 
 
-
 def BOAccount_getAccounts(CRM:SuiteCRM.SuiteCRM, bo_account_id:str):
-    accounts = CRM.get_BOcontaAccounts(bo_account_id)
+    accounts = CRM.GetSubPanelData(parentModule="GCR_ContaBackoffice", parentId=bo_account_id, module="accounts", subpanel="gcr_contabackoffice_accounts")
     if accounts and len(accounts) > 0:
         return accounts
     else:
         return None
 
     
-
 def SecurityGroup_Get(CRM:SuiteCRM.SuiteCRM, name:str) -> tuple[str,dict]:
     if name:
         resp = CRM.GetData("security-groups", filtro={'name': name})

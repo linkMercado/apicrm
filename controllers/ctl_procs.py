@@ -14,28 +14,10 @@ from dal import dal_crm
 WATSON_UserID = 'a2fc0fc9-cb48-39c3-2bb2-658b42a377d7'
 
 
-def cria_notificacao(business_unit_id:str, titulo:str, texto:str=None) -> str:
-    """
-    cria uma nota no CRM(business_unit_id:str, titulo:str, texto:str=None)
-    """
-    CRM = SuiteCRM.SuiteCRM(logger)
-
-    crm_account = CRM.GetData("accounts",{'bu_id_c': business_unit_id})
-    if crm_account:
-        crm_account_id = crm_account[0].get('id')
-        crm_nota = CRM.cria_note(parent_type="accounts", parent_id=crm_account_id, name=titulo, description=texto)
-        crm_nota_id = crm_nota.get('data',{}).get('saveRecord',{}).get('record',{}).get('_id')
-        msg = f"Nota {crm_nota_id} para a bu:{business_unit_id} criada."
-    else:
-        msg = f"Não exite conta para a bu:{business_unit_id}"    
-    return msg  
-
-
 def sync_BO2CRM_Account(account_id:str, userid:str=None, crm_user_id:str=None, gerente_relacionamento:str=None) -> tuple[dict, dict]:
     return dict(), dict()
     """
       FORA DE USO
-    """
     _crm_user_id = None
     if int(account_id) <= 1:
         raise ValueError(f"account_id inválido: {account_id}, deve ser maior do que 1")
@@ -197,7 +179,7 @@ def sync_BO2CRM_Account(account_id:str, userid:str=None, crm_user_id:str=None, g
                         if removeu:
                             respostas[bu_id] += 'Removido CRM, inativo.'
                         else:
-                            respostas[bu_id] += 'Tentativa de remoção do CRM.'
+                            respostas[bu_id] += 'Tentativa de remoção do CRM'
                         suite_ids[bu_id] = None
                         break
                     else:
@@ -323,6 +305,7 @@ def sync_BO2CRM_Account(account_id:str, userid:str=None, crm_user_id:str=None, g
             logger.critical(f"Account: {suite_id} sem suite_id !")
 
     return respostas, suite_ids
+    """
 
 
 def sync_BO2CRM_BUsBeneficiadas() -> tuple[dict, dict]:
@@ -432,9 +415,9 @@ def sync_BO2CRM_BUsBeneficiadas() -> tuple[dict, dict]:
 
             # faz as associações
             # 1 - BOAccount
-            _ = CRM.AssociateData("GCR_ContaBackoffice", base_record_id=BOAccount_id, relate_module="accounts", relate_record_ids=_crm_bu['id'])
+            dal_crm.BOAccount_AssociaBU(CRM, crm_id=BOAccount_id, crm_account_ids=_crm_bu['id'])
             # 2 - Contract
-            _ = CRM.AssociateData("contracts", base_record_id=crm_contract['id'], relate_module="accounts", relate_record_ids=_crm_bu['id'])
+            dal_crm.Contract_AssociaAccounts(CRM, crm_contract_id=crm_contract['id'], crm_account_id=_crm_bu['id'])
 
     # sobrou account ? Remover do CRM !!
     for _acc in crm_bus:
@@ -495,75 +478,6 @@ def sync_CRM2BO_Account() -> tuple[str: dict]:
             resp += f"Account {account_id}:{CRLF}{TAB}{msg_list}"
     return resp, suite_ids
 
-
-def sync_BOContas_comLM(id_conta_lm:str=None) -> list:
-    # não pode ser usada
-    # só serve para criar
-    return list()
-    suite_ids = list()
-    CRM = SuiteCRM.SuiteCRM(logger)
-    BOContas = dal_lm.GetBOContas(id_conta_lm)
-    # 393739
-    #ww = CRM.GetData("GCR_ContaBackoffice", { 'id': '26c5bfb9-049a-f601-d309-6668336f5735' })
-    for BOConta in BOContas:
-        BOConta_data = mod_crm.BOConta().fromBO(BOConta).__dict__
-        s, crm = CRM.PostData("GCR_ContaBackoffice", BOConta_data)
-        if not s and crm:
-            for acc_id in BOConta['crm_accounts'].split(','):
-                r = CRM.AssociateData("GCR_ContaBackoffice", base_record_id=crm['id'], relate_module="accounts", relate_record_ids=acc_id)
-                if not r:
-                    print(crm['id'], acc_id)
-                else:
-                    suite_ids.append(crm.get('id'))                    
-        print('id_conta_lm', BOConta['id_conta_lm'])                
-    return suite_ids
-
-
-def sync_BOContas_Accounts() -> None:
-    CRM = SuiteCRM.SuiteCRM(logger)
-
-    # pega todas as BOAccounts
-    s, BOContas = dal_crm.Get(CRM, module="GCR_ContaBackoffice", filtro=dict())
-    if s:
-        for BOConta in BOContas.get('data',[]):
-            BO_account_id = BOConta['id']
-            # pega todas as contas com o mesmo id_conta_lm
-            crm_accounts = dal_crm.Account_Get(CRM,id_conta_lm=BOConta.get('id_conta_lm'))
-
-            # e associa ao BOAccount
-            for crm_account in crm_accounts:
-                acc_id = crm_account['id']
-                _ = CRM.AssociateData("GCR_ContaBackoffice", base_record_id=BO_account_id, relate_module="accounts", relate_record_ids=acc_id)
-                print('.', end='')
-    print()
-
-
-def sync_BOContas_Contracts() -> None:
-    CRM = SuiteCRM.SuiteCRM(logger)
-
-    idLM_Contracts = dal_lm.GetCRMIdContaLM_Contracts()
-    for idLM_Contract in idLM_Contracts:
-        s, BOConta = dal_crm.Get(CRM, module="GCR_ContaBackoffice", filtro={'id_conta_lm':idLM_Contract['id_conta_lm_c']})
-        if s and BOConta and len(BOConta.get('data',[])) > 0:
-            BOConta_id = BOConta['data'][0]['id']
-            for crm_contract_id in idLM_Contract['contract_id_list'].split(','):
-                _ = CRM.AssociateData("GCR_ContaBackoffice", base_record_id=BOConta_id, relate_module="contracts", relate_record_ids=crm_contract_id)
-                print('.', end='')
-    print()
-
-
-def sync_BOContas_Contacts() -> None:
-    CRM = SuiteCRM.SuiteCRM(logger)
-
-    idLM_Contacts = dal_lm.GetCRMIdContaLM_Contacts()
-    for idLM_Contact in idLM_Contacts:
-        s, BOConta = dal_crm.Get(CRM, module="GCR_ContaBackoffice", filtro={'id_conta_lm':idLM_Contact['id_conta_lm']})
-        if s and BOConta and len(BOConta.get('data',[])) > 0:
-            BOConta_id = BOConta['data'][0]['id']
-            for crm_contact_id in idLM_Contact['contact_id_list'].split(','):
-                _ = CRM.AssociateData("GCR_ContaBackoffice", base_record_id=BOConta_id, relate_module="contacts", relate_record_ids=crm_contact_id)
-                print('.', end='')
-    print()
 
 
 def trata_contatos(CRM, suite_id:str, contatos:list=list()) -> dict:
@@ -633,7 +547,7 @@ def _infosComuns(CRM, suite_id:str, entity_data:dict):
     representante_comercial = entity_data.get("assigned_user_id")
     gerente_relacionamento = entity_data.get("users_accounts_1users_ida")
     conta_mestre = entity_data.get("parent_id")
-    s, r = dal_crm.Get(CRM, module="accounts", filtro={'id': suite_id})
+    s, r = dal_crm.GetObject(CRM, module="accounts", filtro={'id': suite_id})
     id_conta_lm = r.get('data',[{}])[0].get("id_conta_lm_c",'0') if r else '0'
     # se informou o Representante Comercial ou o Gerente de Relacionamento e uma conta Mestre
     if id_conta_lm != '0':
@@ -649,7 +563,7 @@ def _infosComuns(CRM, suite_id:str, entity_data:dict):
             for conta in dal_crm.Account_Get(CRM, id_conta_lm=id_conta_lm):
                 _dados["id"] = conta.get('id')
                 if _dados["id"] != suite_id:
-                    _s, _d = dal_crm.Put(CRM, module="accounts", entity_data=_dados)
+                    _s, _d = dal_crm.PutObject(CRM, module="accounts", entity_data=_dados)
                     if _s:
                         logger.debug(f"Erro:{_s}, Conta:{_dados['id']} não foi atualizada")    
                         
@@ -665,7 +579,7 @@ def Get(module:str, filtro:dict=dict()) -> tuple[bool, dict]:
             return False, { 'msg':'Os filtros possíveis são [nome], [email], [first_name] e [id].' }
 
     CRM = SuiteCRM.SuiteCRM(logger)
-    return dal_crm.Get(CRM, module=module, filtro=filtro)
+    return dal_crm.GetObject(CRM, module=module, filtro=filtro)
 
 
 def Put(module:str, entity_data:dict) -> tuple[bool, dict]:
@@ -675,7 +589,7 @@ def Put(module:str, entity_data:dict) -> tuple[bool, dict]:
         id_cliente = entity_data.get('id_cliente')
         if id_cliente:
             del entity_data['id_cliente']
-            s, d = dal_crm.Get(CRM, module, filtro={'id_cliente_c': id_cliente})
+            s, d = dal_crm.GetObject(CRM, module, filtro={'id_cliente_c': id_cliente})
             if s:
                 data = d.get('data',[])
                 if len(data) == 1:
@@ -696,7 +610,7 @@ def Put(module:str, entity_data:dict) -> tuple[bool, dict]:
         if not entity_data.get('id'):
             return False, { 'msg':'O ID do contato precisa ser informado [id].' }
 
-    s, d = dal_crm.Put(CRM, module=module, entity_data=entity_data)
+    s, d = dal_crm.PutObject(CRM, module=module, entity_data=entity_data)
     suite_id = d.get('data',{}).get('id') if d else None
     if suite_id and module == 'accounts':
         # trata as informações que devem ser as mesmas para todas as contas com o mesmo id_conta_lm_
@@ -719,7 +633,7 @@ def Post(module:str, entity_data:dict) -> tuple[bool, dict]:
             return False, { 'msg':'Falta indicação da Conta associada a esse Contato [id_cliente].' }
         
     CRM = SuiteCRM.SuiteCRM(logger)
-    s, d = dal_crm.Post(CRM, module=module, entity_data=entity_data)
+    s, d = dal_crm.PostObject(CRM, module=module, entity_data=entity_data)
     suite_id = d.get('data',{}).get('id') if d else None
     if suite_id and module == 'accounts':
         # trata as informações que devem ser as mesmas para todas as contas com o mesmo id_conta_lm_
@@ -729,7 +643,7 @@ def Post(module:str, entity_data:dict) -> tuple[bool, dict]:
 
 def Delete(module:str, entity_data:dict) -> bool:
     CRM = SuiteCRM.SuiteCRM(logger)
-    return dal_crm.Delete(CRM, module=module, entity_data=entity_data)
+    return dal_crm.DeleteObject(CRM, module=module, entity_data=entity_data)
 
 def descobre_RC_GC_ids(CRM:SuiteCRM.SuiteCRM, RC_name:str=None, GC_name:str=None) -> tuple[str, str]:
     RC_id, GC_id = None, None
@@ -782,12 +696,13 @@ def pega_grupos_ids(CRM:SuiteCRM.SuiteCRM, RC_id:str=None, GC_id:str=None) -> st
 
 def cria_BOconta(CRM:SuiteCRM.SuiteCRM, name:str, id_conta_lm:str, assigned_user_id:str, gerente_relacionamento_id:str, security_ids:str) -> tuple[str, dict]:
     # cria BOAccount
-    s, BOAccount = CRM.cria_BOconta(name=name, 
-                                    id_conta_lm=id_conta_lm, 
-                                    assigned_user_id=assigned_user_id,
-                                    gerente_relacionamento_id=gerente_relacionamento_id,
-                                    security_ids=security_ids
-                                    )
+    s, BOAccount = dal_crm.BOAccount_Create(CRM, {
+                                            'name': name, 
+                                            'id_conta_lm': id_conta_lm, 
+                                            'assigned_user_id': assigned_user_id,
+                                            'gerente_relacionamento_id': gerente_relacionamento_id,
+                                            'security_ids': security_ids
+                                        })
     if s:
         # não foi possível criar a BOAccount
         logger.critical(f"BOAccount: Não foi criado. Erro:{s}")
@@ -877,7 +792,7 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
     sec_grupo = pega_grupos_ids(CRM, RC_id=RC_id, GC_id=GC_id)
     
     # pega o BOAccounts com esse id_conta_lm
-    BOAccount = CRM.get_BOconta(id_conta_lm=id_conta_lm)
+    BOAccount = dal_crm.BOAccount_Get(CRM, id_conta_lm=id_conta_lm)
     if BOAccount:
         if len(BOAccount) == 1:
             BOAccount = BOAccount[0]
@@ -993,7 +908,7 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
                                     )
     else:
         # só inclui
-        _ = CRM.AssociateData("GCR_ContaBackoffice", base_record_id=BOAccount['id'], relate_module="accounts", relate_record_ids=crm_BU['id'])
+        dal_crm.BOAccount_AssociaBU(CRM, crm_id=BOAccount['id'], crm_account_ids=crm_BU['id'])
 
     return "OK"
 
@@ -1171,11 +1086,11 @@ def sync_contact(CRM:SuiteCRM.SuiteCRM=None, contact_data:dict=dict()) -> str:
     # associa o contato a BU
     dal_crm.Account_AssociaContatos(CRM, crm_account['id'], k['id'])
 
+    # provisório enquanto não abre o subpainel de BUs no Contact
     # associa a BU ao contato
     dal_crm.Contact_AssociaAccounts(CRM, k['id'], crm_account['id'])
 
     # coloca o contato também na conta BO ?
-    grupos = ""
     s, BOAccount = dal_crm.BOAccount_Get(CRM, id_conta_lm=crm_account['id_conta_lm_c'])
     if not s:
         if BOAccount and len(BOAccount) != 1:
@@ -1188,7 +1103,7 @@ def sync_contact(CRM:SuiteCRM.SuiteCRM=None, contact_data:dict=dict()) -> str:
         #    _ = dal_crm.Contact_AssociaGruposSeguranca(CRM, crm_contact_id=k['id'], crm_sec_grup_ids=grupos[:-1] )
         
         # se só existe uma BU nessa BOAccount, o contato também é do BOAccount
-        BUs = CRM.get_BOcontaAccounts(BOAccount['id'])
+        BUs = dal_crm.BOAccount_getAccounts(CRM, bo_account_id=BOAccount['id'])
         if len(BUs) == 1:
             dal_crm.BOAccount_AssociaContacts(CRM, BOAccount['id'], k['id'])
 
@@ -1473,19 +1388,6 @@ def processa_arquivo_deleta_contratos(file_path:str, skiplines:int=0) -> str:
     return f"arquivo com {row_num-1} registros processado, {qtd_deletados} contratos deletados e {qtd_erros_formatacao} erros de formatação no CSV"
 
 
-def coloca_nome_nos_contatos_sem_nome():
-    CRM = SuiteCRM.SuiteCRM(logger) 
-
-    contatos = CRM.GetData("contacts")
-    for k in contatos:
-        if not (k.get('first_name') or k.get('last_name')):
-            fisrt_name = k.get('email1')
-            if not fisrt_name:
-                fisrt_name = k['id']
-            z = CRM.PutData("contacts", { 'id':k['id'], 'first_name':fisrt_name})
-            print(z)
-
-
 def coloca_contatos_nos_BOAccounts():
     CRM = SuiteCRM.SuiteCRM(logger)     
 
@@ -1517,4 +1419,3 @@ def associa_BUs_aos_contatos():
         for contato in contatos if contatos else []:
             dal_crm.Contact_AssociaAccounts(CRM, crm_contact_id=contato['id'], crm_account_id=bu_id)
 
-associa_BUs_aos_contatos()

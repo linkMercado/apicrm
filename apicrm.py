@@ -54,9 +54,7 @@ def app_procedures(procedure):
         args = request.get_json()
 
     status=200
-    if procedure == "cria_notificacao":
-        msg = ctl_procs.cria_notificacao(**args)
-    elif procedure == "processa_arquivo_contas":
+    if procedure == "processa_arquivo_contas":
         msg = ctl_procs.processa_arquivo_contas(**args)
     elif procedure == "processa_arquivo_contratos":
         msg = ctl_procs.processa_arquivo_contratos(**args)
