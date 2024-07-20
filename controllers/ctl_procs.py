@@ -645,18 +645,18 @@ def Delete(module:str, entity_data:dict) -> bool:
     CRM = SuiteCRM.SuiteCRM(logger)
     return dal_crm.DeleteObject(CRM, module=module, entity_data=entity_data)
 
-def descobre_RC_GC_ids(CRM:SuiteCRM.SuiteCRM, RC_name:str=None, GC_name:str=None) -> tuple[str, str]:
-    RC_id, GC_id = None, None
+def descobre_RC_GC_ER_ids(CRM:SuiteCRM.SuiteCRM, RC_name:str=None, GC_name:str=None, ER_name:str=None) -> tuple[str, str, str]:
+    RC_id, GC_id, ER_id = None, None, None
 
-    # id do RC
+    # descobre o id do RC
     if RC_name:
         user = dal_crm.User_Get(CRM, username=RC_name)
         if user:
             RC_id = user.get('id')
         else:
             logger.critical(f"Não achou o RC {RC_name}")
-
-    # descobre o grupo do GC
+        
+    # descobre o id do GC
     if GC_name:
         user = dal_crm.User_Get(CRM, username=GC_name)
         if user:
@@ -664,30 +664,50 @@ def descobre_RC_GC_ids(CRM:SuiteCRM.SuiteCRM, RC_name:str=None, GC_name:str=None
         else:
             logger.critical(f"Não achou o GC {GC_name}")
     
-    return RC_id, GC_id
+    # descobre o id do Especialista
+    if ER_name:
+        user = dal_crm.User_Get(CRM, username=ER_name)
+        if user:
+            ER_id = user.get('id')
+        else:
+            logger.critical(f"Não achou o Especialista {ER_name}")
+
+    return RC_id, GC_id, ER_id
 
 
-def pega_grupos_ids(CRM:SuiteCRM.SuiteCRM, RC_id:str=None, GC_id:str=None) -> str:
+def pega_grupos_ids(CRM:SuiteCRM.SuiteCRM, RC_id:str=None, GC_id:str=None, ER_id:str=None) -> str:
     grupos = ""
 
     # descobre o grupo do RC
     if RC_id:
         user = dal_crm.User_Get(CRM, id=RC_id)
-        s, grp_RC = dal_crm.SecurityGroup_Get(CRM, name=f"Rep. Com. {user.get('user_name')}")
-        if (not s) and len(grp_RC) == 1:
-            grupos = f"{grp_RC[0]['id']},"
-        else:
-            logger.critical(f"Não achou o grupo Rep. Com. {user.get('user_name')}")
-
+        if user and len(user) == 1:
+            s, grp_RC = dal_crm.SecurityGroup_Get(CRM, name=f"Rep. Com. {user[0].get('user_name')}")
+            if (not s) and len(grp_RC) == 1:
+                grupos = f"{grp_RC[0]['id']},"
+            else:
+                logger.critical(f"Não achou o grupo Rep. Com. {user[0].get('user_name')}")
+        
     # descobre o grupo do GC
     if GC_id:
         user = dal_crm.User_Get(CRM, id=GC_id)
-        s, grp_GC = dal_crm.SecurityGroup_Get(CRM, name=f"Gerente {user.get('user_name')}")
-        if (not s) and len(grp_GC) == 1:
-            grupos += f"{grp_GC[0]['id']},"
-        else:
-            logger.critical(f"Não achou o grupo Gerente {user.get('user_name')}")
+        if user and len(user) == 1:
+            s, grp_GC = dal_crm.SecurityGroup_Get(CRM, name=f"Gerente {user[0].get('user_name')}")
+            if (not s) and len(grp_GC) == 1:
+                grupos += f"{grp_GC[0]['id']},"
+            else:
+                logger.critical(f"Não achou o grupo Gerente {user[0].get('user_name')}")
     
+    # descobre o grupo do ER
+    if ER_id:
+        user = dal_crm.User_Get(CRM, id=ER_id)
+        if user and len(user) == 1:
+            s, grp_ER = dal_crm.SecurityGroup_Get(CRM, name=f"Especialista {user[0].get('name')}")
+            if (not s) and len(grp_ER) == 1:
+                grupos += f"{grp_ER[0]['id']},"
+            else:
+                logger.critical(f"Não achou o grupo Especialista {user[0].get('name')}")
+
     # normaliza a resposta
     if grupos:
         return grupos[:-1]
@@ -788,8 +808,8 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
             return f"BU: Solicitação de deleção de BU inexistente, id_cliente:{id_cliente}."
 
     # paga os ids do RC e do GC e os grupos de segurança
-    RC_id, GC_id = descobre_RC_GC_ids(CRM, RC_name=account_data.get('assigned_user_name'), GC_name=account_data.get('gerente_relacionamento_name'))
-    sec_grupo = pega_grupos_ids(CRM, RC_id=RC_id, GC_id=GC_id)
+    RC_id, GC_id, _ = descobre_RC_GC_ER_ids(CRM, RC_name=account_data.get('assigned_user_name'), GC_name=account_data.get('gerente_relacionamento_name'), ER_name=None)
+    sec_grupo = pega_grupos_ids(CRM, RC_id=RC_id, GC_id=GC_id, ER_id=None)
     
     # pega o BOAccounts com esse id_conta_lm
     BOAccount = dal_crm.BOAccount_Get(CRM, id_conta_lm=id_conta_lm)
@@ -886,7 +906,7 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
     old_RC_id = BOAccount.get('assigned_user_id')
     old_GC_id = BOAccount.get('users_gcr_contabackoffice_1users_ida')
     if (old_RC_id != RC_id) or (old_GC_id != GC_id):
-        old_sec_grupo = pega_grupos_ids(CRM, RC_id=old_RC_id, GC_id=old_GC_id)
+        old_sec_grupo = pega_grupos_ids(CRM, RC_id=old_RC_id, GC_id=old_GC_id, ER_id=None)
         dal_crm.BOAccount_RemoveGrupoSeguranca(CRM, BOAccount['id'], grupos=old_sec_grupo)
 
         # atuliza RC e GC do BOAccount           
@@ -1032,7 +1052,7 @@ def sync_contact(CRM:SuiteCRM.SuiteCRM=None, contact_data:dict=dict()) -> str:
     # pega os grupos de segurança RC e GC desse account
     RC_id=crm_account.get('assigned_user_id')
     GC_id=crm_account.get('users_accounts_1users_ida')
-    contact_data['security_ids'] = pega_grupos_ids(CRM, RC_id=RC_id, GC_id=GC_id)
+    contact_data['security_ids'] = pega_grupos_ids(CRM, RC_id=RC_id, GC_id=GC_id, ER_id=None)
 
     # coloca o link com BU
     # contact_data['contact_account_id'] = crm_account.get('id')
@@ -1140,25 +1160,44 @@ def sync_contract(CRM:SuiteCRM.SuiteCRM=None, contract_data:dict=dict()) -> str:
         elif k in ["assigned_user_name", 'especialista_relacionamento_name']:
             contract_data[k] = v.upper()
 
-    # retira do dict informações básicas
-    v = ajusta_dict(contract_data, 'id_cliente', 'id_cliente_c')
-    if v:
-        id_cliente = v
-    else:
-        return "BU [id_cliente] não informado"
-
-    v = ajusta_dict(contract_data, 'id_conta_lm', 'id_conta_lm_c')
-    if v:
-        id_conta_lm = v
-    else:
-        return "BOAccount [id_contalm] não informado"
+    # ajusta os campos para o CRM
+    ajusta_dict(contract_data, 'data_cancelamento_c', 'data_cancelamento')
+    ajusta_dict(contract_data, 'status_contrato_c', 'status_contrato')
+    ajusta_dict(contract_data, 'forma_pagamento_c', 'forma_pagamento')
+    ajusta_dict(contract_data, 'total_contract_value', 'valor_contrato')
+    ajusta_dict(contract_data, 'valor_pago_mes_atual_c', 'valor_pago_mes_atual')
+    ajusta_dict(contract_data, 'valor_pago_mes_passado_c', 'valor_pago_mes_passado')
+    ajusta_dict(contract_data, 'valor_pago_mes_retrasado_c', 'valor_pago_mes_retrasado')
+    contract_data['status'] = 'Signed'
 
     # informou o número do contrato ?
     v = ajusta_dict(contract_data, 'reference_code', 'numero_contrato')
     if v:
         reference_code = v
+        crm_contrato = dal_crm.Contract_Get(CRM, numero=reference_code)
+        contrato_novo = (not crm_contrato) or (len(crm_contrato) == 0)
     else:
         return "Número do contrato [numero_contrato] não informado"
+
+    # informou a BU ?
+    v = ajusta_dict(contract_data, 'id_cliente', 'id_cliente_c')
+    if contrato_novo and not v:
+        return "BU [id_cliente] não informado"
+    else:
+        id_cliente = v        
+        # pega a conta Contratante ?
+        ContaContratante = dal_crm.Account_Get(CRM, id_cliente=id_cliente)
+        if not ContaContratante or len(ContaContratante) != 1:
+            return f"BU Contratante: foram encontrados {len(ContaContratante) if ContaContratante else 0} registros no CRM com id_cliente={id_cliente} !"
+        ContaContratante = ContaContratante[0]
+
+    v = ajusta_dict(contract_data, 'id_conta_lm', 'id_conta_lm_c')
+    if contrato_novo and not v:
+        return "BOAccount [id_contalm] não informado"
+    else:
+        # usar o id_conta_lm da ContaContratante
+        print("todo: usar o id_conta_lm da ContaContratante")
+        id_conta_lm = v
 
     if not contract_data.get('name'):
         return "Contrato sem nome [id_cliente]"
@@ -1167,46 +1206,38 @@ def sync_contract(CRM:SuiteCRM.SuiteCRM=None, contract_data:dict=dict()) -> str:
     if v is None:
         return "Representante Comercial [representante_comercial] não informado"
 
-    ajusta_dict(contract_data, 'data_cancelamento_c', 'data_cancelamento')
-    ajusta_dict(contract_data, 'status_contrato_c', 'status_contrato')
-    ajusta_dict(contract_data, 'especialista_relacionamento_name', 'especialista')
-    ajusta_dict(contract_data, 'forma_pagamento_c', 'forma_pagamento')
-
-    contract_data['status'] = 'Signed'
+    Especialista_name = ajusta_dict(contract_data, 'especialista_relacionamento_name', 'especialista')
+    if Especialista_name is None:
+        return "Especialista [especialista] não informado"
 
     # ajusta a data de encerramento do contrato
     if (data_cancelamento:=contract_data.get('data_cancelamento_c')) and not contract_data.get('end_date'):
         contract_data['end_date'] = data_cancelamento
 
-    # ajusta as informações dos valores pagos
-    ajusta_dict(contract_data, 'total_contract_value', 'valor_contrato')
-    ajusta_dict(contract_data, 'valor_pago_mes_atual_c', 'valor_pago_mes_atual')
-    ajusta_dict(contract_data, 'valor_pago_mes_passado_c', 'valor_pago_mes_passado')
-    ajusta_dict(contract_data, 'valor_pago_mes_retrasado_c', 'valor_pago_mes_retrasado')
 
     if CRM is None:
         CRM = SuiteCRM.SuiteCRM(logger)
 
     # pega a conta BO
-    s, BOConta = dal_crm.BOAccount_Get(CRM, id_conta_lm)
-    if s or (not BOConta) or len(BOConta) != 1:
-        return f"BOAccount: foram encontrados {len(BOConta) if BOConta else 0} registros no CRM com id_conta_lm={id_conta_lm} !"
-    BOConta = BOConta[0]
-    
-    # coloca o id da BOAccount nos dados do contrato
-    contract_data['gcr_contabackoffice_aos_contracts_id'] = BOConta['id']
+    s, BOAccount = dal_crm.BOAccount_Get(CRM, id_conta_lm)
+    if s or (not BOAccount) or len(BOAccount) != 1:
+        return f"BOAccount: foram encontrados {len(BOAccount) if BOAccount else 0} registros no CRM com id_conta_lm={id_conta_lm} !"
+    BOAccount = BOAccount[0]
+    RC_id = BOAccount.get('assigned_user_id')
+    GC_id = BOAccount.get('users_gcr_contabackoffice_1users_ida')
+    _, _, ER_id = descobre_RC_GC_ER_ids(CRM, RC_name=None, GC_name=None, ER_name=Especialista_name)
 
-    # pega a conta Contratante ?
-    ContaContratante = dal_crm.Account_Get(CRM, id_cliente=id_cliente)
-    if not ContaContratante or len(ContaContratante) != 1:
-        return f"BU Contratante:  foram encontrados {len(ContaContratante) if ContaContratante else 0} registros no CRM com id_cliente={id_cliente} !"
-    ContaContratante = ContaContratante[0]
+    # coloca no contrato os grupos que podem ve-lo
+    grupos_sec = pega_grupos_ids(CRM, RC_id=RC_id, GC_id=GC_id, ER_id=ER_id)
+    contract_data['security_ids'] = grupos_sec
+
+    # coloca o id da BOAccount nos dados do contrato
+    contract_data['gcr_contabackoffice_aos_contracts_id'] = BOAccount['id']
 
     # coloca o id da conta nos dados do contrato
     contract_data['contract_account_id'] = ContaContratante.get('id')
 
     # verifica se o contrato existe
-    crm_contrato = dal_crm.Contract_Get(CRM, numero=reference_code)
     if crm_contrato:
         # se existe, atualiza as informações
         contract_data['id'] = crm_contrato[0].get('id')
@@ -1219,7 +1250,9 @@ def sync_contract(CRM:SuiteCRM.SuiteCRM=None, contract_data:dict=dict()) -> str:
         s, _ = dal_crm.Contract_Create(CRM, contract_data)
         if s:
             return f"Contrato não foi criado. Erro:{s}, Dados:{contract_data}"
-            
+
+    # coloca o grupo do especialita na BU Contratante
+    dal_crm.Account_AssociaGruposSeguranca(CRM, ContaContratante, grupos_sec)
     return "OK"
 
 
@@ -1419,3 +1452,36 @@ def associa_BUs_aos_contatos():
         for contato in contatos if contatos else []:
             dal_crm.Contact_AssociaAccounts(CRM, crm_contact_id=contato['id'], crm_account_id=bu_id)
 
+def associa_gruposseguranca_aos_contratos():
+    CRM = SuiteCRM.SuiteCRM(logger)     
+
+    # pega as BOAccounts
+    BOAccounts = dal_crm.BOAccounts(CRM)
+    for BOAccount in BOAccounts:
+        print('>', end='')
+        RC_id = BOAccount.get('assigned_user_id')
+        GC_id = BOAccount.get('users_gcr_contabackoffice_1users_ida')
+        
+        # pega o grupo
+        grupo1 = pega_grupos_ids(CRM, RC_id=RC_id, GC_id=GC_id, ER_id=None)
+        
+        # pega os contratos dessas BOAccounts
+        contratos = dal_crm.BOAccount_getContracts(CRM, BOAccount['id'])
+        for contrato in contratos if contratos else []:
+            print('.', end='')
+            RC_id = contrato.get('assigned_user_id')
+            ER_id = contrato.get('users_aos_contracts_1users_ida')
+            grupo2 = pega_grupos_ids(CRM, RC_id=RC_id, GC_id=None, ER_id=ER_id)
+
+            # todo
+            print("todo: remover os grupos anteriores")
+            # associa ao contrato
+            dal_crm.Contract_AssociaGruposSeguranca(CRM, crm_contract_id=contrato['id'], crm_sec_grup_ids=f"{grupo1},{grupo2}")
+
+            # todo
+            print("todo: remover os grupos anteriores")
+
+            # associa a BU contratante
+            dal_crm.Account_AssociaGruposSeguranca(CRM, crm_account_id=contrato['contract_account_id'], crm_sec_grup_ids=grupo2)
+
+# associa_gruposseguranca_aos_contratos()
