@@ -645,37 +645,48 @@ def Delete(module:str, entity_data:dict) -> bool:
     CRM = SuiteCRM.SuiteCRM(logger)
     return dal_crm.DeleteObject(CRM, module=module, entity_data=entity_data)
 
-def descobre_RC_GC_ER_ids(CRM:SuiteCRM.SuiteCRM, RC_name:str=None, GC_name:str=None, ER_name:str=None) -> tuple[str, str, str]:
+
+def ajusta_dict(data:dict, key:str, alt_key:str) -> any:
+    x1 = data.get(key)
+    x2 = data.get(alt_key)
+    if x2:
+        del data[alt_key]
+    r = x1 if x1 else x2
+    data[key] = r
+    return r
+
+
+def descobreIDs_RC_GC_ER(CRM:SuiteCRM.SuiteCRM, RC_name:str=None, GC_name:str=None, ER_name:str=None) -> tuple[str, str, str]:
     RC_id, GC_id, ER_id = None, None, None
 
     # descobre o id do RC
     if RC_name:
         user = dal_crm.User_Get(CRM, username=RC_name)
-        if user:
-            RC_id = user.get('id')
+        if user and len(user) == 1:
+            RC_id = user[0].get('id')
         else:
             logger.critical(f"Não achou o RC {RC_name}")
         
     # descobre o id do GC
     if GC_name:
         user = dal_crm.User_Get(CRM, username=GC_name)
-        if user:
-            GC_id = user.get('id')
+        if user and len(user) == 1:
+            GC_id = user[0].get('id')
         else:
             logger.critical(f"Não achou o GC {GC_name}")
     
     # descobre o id do Especialista
     if ER_name:
         user = dal_crm.User_Get(CRM, username=ER_name)
-        if user:
-            ER_id = user.get('id')
+        if user and len(user) == 1:
+            ER_id = user[0].get('id')
         else:
             logger.critical(f"Não achou o Especialista {ER_name}")
 
     return RC_id, GC_id, ER_id
 
 
-def pega_grupos_ids(CRM:SuiteCRM.SuiteCRM, RC_id:str=None, GC_id:str=None, ER_id:str=None) -> str:
+def pegaIDs_grupos_seguranca(CRM:SuiteCRM.SuiteCRM, RC_id:str=None, GC_id:str=None, ER_id:str=None) -> str:
     grupos = ""
 
     # descobre o grupo do RC
@@ -731,22 +742,6 @@ def cria_BOconta(CRM:SuiteCRM.SuiteCRM, name:str, id_conta_lm:str, assigned_user
         return None, BOAccount
 
 
-def cria_BU(CRM:SuiteCRM.SuiteCRM, account_data:dict=dict()) -> tuple[str, dict]:
-    s, crm_account = dal_crm.Account_Create(CRM, account_data)
-    # criou ?
-    if s:
-        logger.critical(f"BU: Não foi criada. Erro:{s}, Dados:{account_data}")
-        return f"BU: Não foi criada. Erro:{s}, Dados:{account_data}", None
-    
-    if (bo_account_id:=account_data['gcr_contabackoffice_accountsgcr_contabackoffice_ida']):
-        # associa a BU ao BOAccount
-        dal_crm.BOAccount_AssociaBU(CRM, crm_id=bo_account_id, crm_account_ids=crm_account['id'])
-
-    # acerta o link no BO
-    dal_lm.PutSuiteID(crm_account.get('bu_id_c'), crm_account.get('id'))
-    return None, crm_account
-
-
 def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
     if not CRM:
         CRM = SuiteCRM.SuiteCRM(logger) 
@@ -758,14 +753,6 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
     if (gerente_relacionamento_name:=account_data.get('gerente_relacionamento_name')):
         account_data['gerente_relacionamento_name'] = gerente_relacionamento_name.upper()
 
-    # procura no dict informações básicas
-    if not account_data.get('name'):
-        return f"Nome Fantasia [name] não informado"
-
-    v = ajusta_dict(account_data, 'razao_social_c', 'razao_social')
-    if v is None:
-        return f"Razao Social [razao_social] não informado"
-
     ajusta_dict(account_data, 'atividade_principal_c', 'atividade_principal')
     ajusta_dict(account_data, 'email1', 'email')
     ajusta_dict(account_data, 'documento_cliente_c', 'documento_cliente')
@@ -774,27 +761,19 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
     ajusta_dict(account_data, 'gerente_relacionamento_name', 'gerente_conta')
     ajusta_dict(account_data, 'assigned_user_name', 'representante_comercial')
 
-    v = ajusta_dict(account_data, 'id_cliente_c', 'id_cliente')
-    if v:
-        id_cliente = v
-    else:
+    id_cliente = ajusta_dict(account_data, 'id_cliente_c', 'id_cliente')
+    if not id_cliente:
         return "BU [id_cliente] não informado"
-
-    v = ajusta_dict(account_data, 'id_conta_lm_c', 'id_conta_lm')
-    if v:
-        id_conta_lm = v
-    else:
-        return "BOAccount [id_contalm] não informado"
 
     # pega a BU com esse id_cliente
     crm_BU = dal_crm.Account_Get(CRM, id_cliente=id_cliente)
     if crm_BU:
         if len(crm_BU) == 1:
             crm_BU = crm_BU[0]
-        else:
+        elif len(crm_BU) > 1:
             return f"BU: Encontrado {len(crm_BU)} registros com id_cliente={id_cliente}"
-    
-    # trata deleção
+
+    # É para deletar ?    
     if account_data.get('status') == 'D':
         # existe a BU ?
         if crm_BU:
@@ -807,21 +786,36 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
             logger.warning(f"BU: Solicitação de deleção de BU inexistente, id_cliente:{id_cliente}.")
             return f"BU: Solicitação de deleção de BU inexistente, id_cliente:{id_cliente}."
 
+    # Se BU nova, testa se informou o básico
+    # Nome Fantasia ?
+    if not crm_BU and not account_data.get('name'):
+        return f"Nome Fantasia [name] não informado"
+
+    # Razão Social
+    v = ajusta_dict(account_data, 'razao_social_c', 'razao_social')
+    if not crm_BU and not v:
+        return f"Razao Social [razao_social] não informado"
+
+    # id_conta_lm
+    id_conta_lm = ajusta_dict(account_data, 'id_conta_lm_c', 'id_conta_lm')
+    if not crm_BU and not id_conta_lm:
+        return "BOAccount [id_contalm] não informado"
+
     # paga os ids do RC e do GC e os grupos de segurança
-    RC_id, GC_id, _ = descobre_RC_GC_ER_ids(CRM, RC_name=account_data.get('assigned_user_name'), GC_name=account_data.get('gerente_relacionamento_name'), ER_name=None)
-    sec_grupo = pega_grupos_ids(CRM, RC_id=RC_id, GC_id=GC_id, ER_id=None)
-    
+    RC_id, GC_id, _ = descobreIDs_RC_GC_ER(CRM, RC_name=account_data.get('assigned_user_name'), GC_name=account_data.get('gerente_relacionamento_name'), ER_name=None)
+    sec_grupo = pegaIDs_grupos_seguranca(CRM, RC_id=RC_id, GC_id=GC_id, ER_id=None)
+
     # pega o BOAccounts com esse id_conta_lm
     BOAccount = dal_crm.BOAccount_Get(CRM, id_conta_lm=id_conta_lm)
     if BOAccount:
         if len(BOAccount) == 1:
             BOAccount = BOAccount[0]
-        else:
+        elif len(BOAccount) > 1:
             logger.critical(f"BOAccount: Encontrado {len(BOAccount)} registros com id_conta_lm={id_conta_lm}")
             return f"BOAccount: Encontrado {len(BOAccount)} registros com id_conta_lm={id_conta_lm}"
-    
-    # se é tudo novo:
-    if not BOAccount and not crm_BU:
+
+    # É para criar o BOAccount ?
+    if not BOAccount:
         # cria BOAccount
         s, BOAccount = cria_BOconta(CRM,
                                     name=account_data.get('name'), 
@@ -834,69 +828,31 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
             # não foi possível criar a BOAccount
             return s
 
-        # indica o BOAccount
-        account_data['gcr_contabackoffice_accountsgcr_contabackoffice_ida'] = BOAccount['id'] 
-        # indica o RC
-        account_data['assigned_user_id'] = BOAccount['assigned_user_id']
-        # indica o GC
-        account_data['gerente_relacionamento_id'] = BOAccount['users_gcr_contabackoffice_1users_ida']
-        
+    # indica o BOAccount
+    account_data['gcr_contabackoffice_accountsgcr_contabackoffice_ida'] = BOAccount['id'] 
+    # indica o RC
+    account_data['assigned_user_id'] = BOAccount['assigned_user_id']
+    # indica o GC
+    account_data['gerente_relacionamento_id'] = BOAccount['users_gcr_contabackoffice_1users_ida']
+
+    # É para criar a BU ?:
+    if not crm_BU:
         # cria BU
-        s, crm_BU = cria_BU(CRM, account_data)
-        if s:
-            # não foi possível criar a Bu
-            return s
-    elif BOAccount and not crm_BU: # tem BOAccount mas a BU é nova
-        # indica o BOAccount
-        account_data['gcr_contabackoffice_accountsgcr_contabackoffice_ida'] = BOAccount['id'] 
-        # indica o RC
-        account_data['assigned_user_id'] = BOAccount['assigned_user_id']
-        # indica o GC
-        account_data['gerente_relacionamento_id'] = BOAccount['users_gcr_contabackoffice_1users_ida']
-        
-        # cria BU
-        s, crm_BU = cria_BU(CRM, account_data)
+        s, crm_BU = dal_crm.Account_Create(CRM, account_data)
         # criou ?
         if s:
-            return s
-    elif not BOAccount and crm_BU: # não tem BOAccount mas tem BU
-        # cria BOAccount
-        s, BOAccount = cria_BOconta(CRM,
-                                    name=account_data.get('name'), 
-                                    id_conta_lm=id_conta_lm, 
-                                    assigned_user_id=RC_id,
-                                    gerente_relacionamento_id=GC_id,
-                                    security_ids=sec_grupo
-                                )
-        if s:
-            # não foi possível criar a BOAccount
-            return s
-        else:
-            print("verificar se precisa do [0]")
+            logger.critical(f"BU: Não foi criada. Erro:{s}, Dados:{account_data}")
+            return f"BU: Não foi criada. Erro:{s}, Dados:{account_data}", None
+        
+        if (bo_account_id:=account_data['gcr_contabackoffice_accountsgcr_contabackoffice_ida']):
+            # associa a BU ao BOAccount
+            dal_crm.BOAccount_AssociaBU(CRM, crm_id=bo_account_id, crm_account_ids=crm_BU['id'])
 
-        # indica o BOAccount
-        account_data['gcr_contabackoffice_accountsgcr_contabackoffice_ida'] = BOAccount['id'] 
-        # indica o RC
-        account_data['assigned_user_id'] = BOAccount['assigned_user_id']
-        # indica o GC
-        account_data['gerente_relacionamento_id'] = BOAccount['users_gcr_contabackoffice_1users_ida']
+        # acerta o link no BO
+        dal_lm.PutSuiteID(crm_BU.get('bu_id_c'), crm_BU.get('id'))
+    else: # Atualiza a BU
         # indica qual a BU
         account_data['id'] = crm_BU['id']
-
-        s, crm_BU = dal_crm.Account_Update(CRM, account_data)
-        # atualizou ?
-        if s:
-            return s
-    else: # tudo existe, faz update na BU
-        # indica o BOAccount
-        account_data['gcr_contabackoffice_accountsgcr_contabackoffice_ida'] = BOAccount['id'] 
-        # indica o RC
-        account_data['assigned_user_id'] = BOAccount['assigned_user_id']
-        # indica o GC
-        account_data['gerente_relacionamento_id'] = BOAccount['users_gcr_contabackoffice_1users_ida']
-        # indica qual a BU
-        account_data['id'] = crm_BU['id']
-                
         s, crm_BU = dal_crm.Account_Update(CRM, account_data)
         # atualizou ?
         if s:
@@ -906,7 +862,7 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
     old_RC_id = BOAccount.get('assigned_user_id')
     old_GC_id = BOAccount.get('users_gcr_contabackoffice_1users_ida')
     if (old_RC_id != RC_id) or (old_GC_id != GC_id):
-        old_sec_grupo = pega_grupos_ids(CRM, RC_id=old_RC_id, GC_id=old_GC_id, ER_id=None)
+        old_sec_grupo = pegaIDs_grupos_seguranca(CRM, RC_id=old_RC_id, GC_id=old_GC_id, ER_id=None)
         dal_crm.BOAccount_RemoveGrupoSeguranca(CRM, BOAccount['id'], grupos=old_sec_grupo)
 
         # atuliza RC e GC do BOAccount           
@@ -927,19 +883,10 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
                                         }
                                     )
     else:
-        # só inclui
+        # associa a BU a BOAccount
         dal_crm.BOAccount_AssociaBU(CRM, crm_id=BOAccount['id'], crm_account_ids=crm_BU['id'])
 
     return "OK"
-
-def ajusta_dict(data:dict, key:str, alt_key:str) -> any:
-    x1 = data.get(key)
-    x2 = data.get(alt_key)
-    if x2:
-        del data[alt_key]
-    r = x1 if x1 else x2
-    data[key] = r
-    return r
 
 def sync_contact(CRM:SuiteCRM.SuiteCRM=None, contact_data:dict=dict()) -> str:
     def deleta_contatos(crm_contatos):
@@ -1023,36 +970,39 @@ def sync_contact(CRM:SuiteCRM.SuiteCRM=None, contact_data:dict=dict()) -> str:
         contact_data['assigned_user_id'] = 1 # força ADMIN como assigned_user_id
 
     # retira do dict informações básicas
-    v = ajusta_dict(contact_data, 'id_cliente_c', 'id_cliente')
-    if v:
-        id_cliente = v
+    id_cliente = ajusta_dict(contact_data, 'id_cliente_c', 'id_cliente')
+    if id_cliente:
         del contact_data['id_cliente_c']
+        # verifica se a BU existe
+        crm_account = dal_crm.Account_Get(CRM, id_cliente=id_cliente)
+        if crm_account:
+            if len(crm_account) != 1:
+                logger.debug(f"BU: forma encontradas {len(crm_account) if crm_account else 0} BUs com id_cliente={id_cliente}")
+                return f"BU: foram encontradas {len(crm_account) if crm_account else 0} BUs com id_cliente={id_cliente}"
+            crm_account = crm_account[0]
     else:
         return "BU [id_cliente] não informado"
 
+    if (not crm_account):
+        logger.debug(f"BU: Não existe no CRM BU com id_cliente={id_cliente}")
+        return f"BU: Não existe no CRM BU com id_cliente={id_cliente}"
+    
     fname = contact_data.get('first_name')
     lname = contact_data.get('last_name')
-    if not (fname or lname):
-        return "BU [first_name ou last_name] não informado"
     if fname:
         contact_data['first_name'] = string.capwords(fname)
     if lname:
         contact_data['last_name'] = string.capwords(lname)
     if lname and not fname:
-        contact_data['first_name'] = lname
+        contact_data['first_name'] = contact_data['last_name']
         contact_data['last_name'] = None
-
-    # verifica se a BU existe
-    crm_account = dal_crm.Account_Get(CRM, id_cliente=id_cliente)
-    if (not crm_account) or len(crm_account) != 1:
-        logger.debug(f"BU: forma encontradas {len(crm_account) if crm_account else 0} BUs com id_cliente={id_cliente}")
-        return f"BU: foram encontradas {len(crm_account) if crm_account else 0} BUs com id_cliente={id_cliente}"
-    crm_account = crm_account[0]
+    if not fname and not lname:
+        return "BU [first_name e last_name] não informados"
 
     # pega os grupos de segurança RC e GC desse account
-    RC_id=crm_account.get('assigned_user_id')
-    GC_id=crm_account.get('users_accounts_1users_ida')
-    contact_data['security_ids'] = pega_grupos_ids(CRM, RC_id=RC_id, GC_id=GC_id, ER_id=None)
+    RC_id = crm_account.get('assigned_user_id')
+    GC_id = crm_account.get('users_accounts_1users_ida')
+    contact_data['security_ids'] = pegaIDs_grupos_seguranca(CRM, RC_id=RC_id, GC_id=GC_id, ER_id=None)
 
     # coloca o link com BU
     # contact_data['contact_account_id'] = crm_account.get('id')
@@ -1060,45 +1010,42 @@ def sync_contact(CRM:SuiteCRM.SuiteCRM=None, contact_data:dict=dict()) -> str:
     # 1) Busca por documento
     # 2) Busca por email
     # 3) Busca por
-    k = None
+    crm_contato = None
     if contact_data.get('cpf_c'):
         crm_contatos = dal_crm.Contact_Get(CRM, document=contact_data.get('cpf_c'))
         if crm_contatos and len(crm_contatos) == 1:
-            contact_merge(contact_data, crm_contatos[0])
-            s, k = dal_crm.Contact_Update(CRM, contact_data)
-            if s:
-                return f"Contato:{contact_data['id']} não foi atualizado. Erro:{s}, Dados:{contact_data}"
-        elif crm_contatos and len(crm_contatos) > 1:
-            deleta_contatos(crm_contatos)
-    # busca por email        
-    if k is None and contact_data.get('email1'):
+            crm_contato = crm_contatos[0]
+
+    # busca por email ?
+    if (not crm_contato) and contact_data.get('email1'):
         crm_contatos = dal_crm.Contact_Get(CRM, email=contact_data.get('email1'))
         if crm_contatos and len(crm_contatos) == 1:
-            contact_merge(contact_data, crm_contatos[0])
-            s, k = dal_crm.Contact_Update(CRM, contact_data)
-            if s:
-                return f"Contato:{contact_data['id']} não foi atualizado. Erro:{s}, Dados:{contact_data}"
-        elif crm_contatos and len(crm_contatos) > 1:
-            deleta_contatos(crm_contatos)
-    if k is None:
+            crm_contato = crm_contatos[0]
+
+    # busca pelas outras informações ?
+    if (not crm_contato) and (contact_data.get('first_name') or
+                              contact_data.get('last_name') or
+                              contact_data.get('phone_work') or
+                              contact_data.get('phone_mobile') or
+                              contact_data.get('phone_mobile')
+                            ):
         # busca por nome e telefones
         crm_contatos = dal_crm.Contact_Get(CRM, 
                                            fname=contact_data.get('first_name'),
-                                           lname = contact_data.get('last_name'),
+                                           lname=contact_data.get('last_name'),
                                            phone_work=contact_data.get('phone_work'),
                                            mobile_phone=contact_data.get('phone_mobile'),
                                            whatsapp=contact_data.get('phone_mobile')
                                         )
-        if crm_contatos:
-            if len(crm_contatos) == 1:
-                contact_merge(contact_data, crm_contatos[0])
-                s, k = dal_crm.Contact_Update(CRM, contact_data)
-                if s:
-                    return f"Contato:{contact_data['id']} não foi atualizado. Erro:{s}, Dados:{contact_data}"
-            elif len(crm_contatos) > 1:
-                deleta_contatos(crm_contatos)
+        if crm_contatos and len(crm_contatos) == 1:
+            crm_contato = crm_contatos[0]
 
-    if not k:
+    if crm_contato:
+        contact_merge(contact_data, crm_contato)
+        s, k = dal_crm.Contact_Update(CRM, contact_data)
+        if s:
+            return f"Contato:{contact_data['id']} não foi atualizado. Erro:{s}, Dados:{contact_data}"
+    else:
         s, k = dal_crm.Contact_Create(CRM, contact_data)
         if s:
             return f"Contato não foi criado. Erro:{s}, Dados:{contact_data}"
@@ -1108,12 +1055,12 @@ def sync_contact(CRM:SuiteCRM.SuiteCRM=None, contact_data:dict=dict()) -> str:
 
     # provisório enquanto não abre o subpainel de BUs no Contact
     # associa a BU ao contato
-    dal_crm.Contact_AssociaAccounts(CRM, k['id'], crm_account['id'])
+    # dal_crm.Contact_AssociaAccounts(CRM, k['id'], crm_account['id'])
 
     # coloca o contato também na conta BO ?
-    s, BOAccount = dal_crm.BOAccount_Get(CRM, id_conta_lm=crm_account['id_conta_lm_c'])
-    if not s:
-        if BOAccount and len(BOAccount) != 1:
+    BOAccount = dal_crm.BOAccount_Get(CRM, id_conta_lm=crm_account['id_conta_lm_c'])
+    if BOAccount:
+        if len(BOAccount) != 1:
             logger.debug(f"BOAcccount: foram encontratos {len(BOAccount)} registros no CRM para id_conta_lm={crm_account['id_conta_lm_c']}")
             return f"BOAcccount: foram encontratos {len(BOAccount)} registros no CRM para id_conta_lm={crm_account['id_conta_lm_c']}"
         BOAccount = BOAccount[0]
@@ -1153,6 +1100,9 @@ def sync_contract(CRM:SuiteCRM.SuiteCRM=None, contract_data:dict=dict()) -> str:
             return datetime.strptime(data, '%d/%m/%Y').date()
         return None
 
+    if CRM is None:
+        CRM = SuiteCRM.SuiteCRM(logger)
+
     # realiza os ajustes necessários (datas e nome)                            
     for k, v in contract_data.items():
         if k in ["date_entered","start_date","end_date","customer_signed_date","company_signed_date","renewal_reminder_date","data_cancelamento_c"]:
@@ -1171,64 +1121,64 @@ def sync_contract(CRM:SuiteCRM.SuiteCRM=None, contract_data:dict=dict()) -> str:
     contract_data['status'] = 'Signed'
 
     # informou o número do contrato ?
-    v = ajusta_dict(contract_data, 'reference_code', 'numero_contrato')
-    if v:
-        reference_code = v
+    reference_code = ajusta_dict(contract_data, 'reference_code', 'numero_contrato')
+    if reference_code:
         crm_contrato = dal_crm.Contract_Get(CRM, numero=reference_code)
         contrato_novo = (not crm_contrato) or (len(crm_contrato) == 0)
     else:
         return "Número do contrato [numero_contrato] não informado"
 
+    if not contrato_novo:
+        crm_contrato = crm_contrato[0]
+
+    if contrato_novo and not contract_data.get('name'):
+        return "Contrato sem nome [name]"
+
+    representante_comercial_name = ajusta_dict(contract_data, 'assigned_user_name', 'representante_comercial')
+    if contrato_novo and not representante_comercial_name:
+        return "Representante Comercial [representante_comercial] não informado"
+
+    especialista_name = ajusta_dict(contract_data, 'especialista_relacionamento_name', 'especialista')
+    if contrato_novo and not especialista_name:
+        return "Especialista [especialista] não informado"
+
     # informou a BU ?
-    v = ajusta_dict(contract_data, 'id_cliente', 'id_cliente_c')
-    if contrato_novo and not v:
+    id_cliente = ajusta_dict(contract_data, 'id_cliente', 'id_cliente_c')
+    if contrato_novo and not id_cliente:
         return "BU [id_cliente] não informado"
     else:
-        id_cliente = v        
         # pega a conta Contratante ?
         ContaContratante = dal_crm.Account_Get(CRM, id_cliente=id_cliente)
         if not ContaContratante or len(ContaContratante) != 1:
             return f"BU Contratante: foram encontrados {len(ContaContratante) if ContaContratante else 0} registros no CRM com id_cliente={id_cliente} !"
         ContaContratante = ContaContratante[0]
+        id_conta_lm = ContaContratante.get('id_conta_lm_c')
 
-    v = ajusta_dict(contract_data, 'id_conta_lm', 'id_conta_lm_c')
-    if contrato_novo and not v:
-        return "BOAccount [id_contalm] não informado"
-    else:
-        # usar o id_conta_lm da ContaContratante
-        print("todo: usar o id_conta_lm da ContaContratante")
-        id_conta_lm = v
+    #id_conta_lm = ajusta_dict(contract_data, 'id_conta_lm', 'id_conta_lm_c')
+    #if contrato_novo and not id_conta_lm:
+    #    return "BOAccount [id_contalm] não informado"
+    #else:
+    #    # usar o id_conta_lm da ContaContratante
+    #    print("todo: usar o id_conta_lm da ContaContratante")
 
-    if not contract_data.get('name'):
-        return "Contrato sem nome [id_cliente]"
-
-    v = ajusta_dict(contract_data, 'assigned_user_name', 'representante_comercial')
-    if v is None:
-        return "Representante Comercial [representante_comercial] não informado"
-
-    Especialista_name = ajusta_dict(contract_data, 'especialista_relacionamento_name', 'especialista')
-    if Especialista_name is None:
-        return "Especialista [especialista] não informado"
 
     # ajusta a data de encerramento do contrato
     if (data_cancelamento:=contract_data.get('data_cancelamento_c')) and not contract_data.get('end_date'):
         contract_data['end_date'] = data_cancelamento
 
-
-    if CRM is None:
-        CRM = SuiteCRM.SuiteCRM(logger)
-
     # pega a conta BO
-    s, BOAccount = dal_crm.BOAccount_Get(CRM, id_conta_lm)
-    if s or (not BOAccount) or len(BOAccount) != 1:
+    BOAccount = dal_crm.BOAccount_Get(CRM, id_conta_lm)
+    if (not BOAccount) or len(BOAccount) != 1:
         return f"BOAccount: foram encontrados {len(BOAccount) if BOAccount else 0} registros no CRM com id_conta_lm={id_conta_lm} !"
-    BOAccount = BOAccount[0]
+    else:
+        BOAccount = BOAccount[0]
+
     RC_id = BOAccount.get('assigned_user_id')
     GC_id = BOAccount.get('users_gcr_contabackoffice_1users_ida')
-    _, _, ER_id = descobre_RC_GC_ER_ids(CRM, RC_name=None, GC_name=None, ER_name=Especialista_name)
+    _, _, ER_id = descobreIDs_RC_GC_ER(CRM, RC_name=None, GC_name=None, ER_name=especialista_name)
 
     # coloca no contrato os grupos que podem ve-lo
-    grupos_sec = pega_grupos_ids(CRM, RC_id=RC_id, GC_id=GC_id, ER_id=ER_id)
+    grupos_sec = pegaIDs_grupos_seguranca(CRM, RC_id=RC_id, GC_id=GC_id, ER_id=ER_id)
     contract_data['security_ids'] = grupos_sec
 
     # coloca o id da BOAccount nos dados do contrato
@@ -1240,7 +1190,7 @@ def sync_contract(CRM:SuiteCRM.SuiteCRM=None, contract_data:dict=dict()) -> str:
     # verifica se o contrato existe
     if crm_contrato:
         # se existe, atualiza as informações
-        contract_data['id'] = crm_contrato[0].get('id')
+        contract_data['id'] = crm_contrato.get('id')
         s, _ = dal_crm.Contract_Update(CRM, contract_data)
         if s:
             logger.debug(f"Contrato:{contract_data.get('id')} não foi atualizado. Erro:{s}, Dados:{contract_data}")
@@ -1463,7 +1413,7 @@ def associa_gruposseguranca_aos_contratos():
         GC_id = BOAccount.get('users_gcr_contabackoffice_1users_ida')
         
         # pega o grupo
-        grupo1 = pega_grupos_ids(CRM, RC_id=RC_id, GC_id=GC_id, ER_id=None)
+        grupo1 = pegaIDs_grupos_seguranca(CRM, RC_id=RC_id, GC_id=GC_id, ER_id=None)
         
         # pega os contratos dessas BOAccounts
         contratos = dal_crm.BOAccount_getContracts(CRM, BOAccount['id'])
@@ -1471,7 +1421,7 @@ def associa_gruposseguranca_aos_contratos():
             print('.', end='')
             RC_id = contrato.get('assigned_user_id')
             ER_id = contrato.get('users_aos_contracts_1users_ida')
-            grupo2 = pega_grupos_ids(CRM, RC_id=RC_id, GC_id=None, ER_id=ER_id)
+            grupo2 = pegaIDs_grupos_seguranca(CRM, RC_id=RC_id, GC_id=None, ER_id=ER_id)
 
             # todo
             print("todo: remover os grupos anteriores")

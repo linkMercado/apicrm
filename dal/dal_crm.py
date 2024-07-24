@@ -359,7 +359,7 @@ def BOAccounts(CRM) -> dict:
     return CRM.GetData("GCR_ContaBackoffice", filtro={})
     
 
-def BOAccount_Get(CRM:SuiteCRM.SuiteCRM, id_conta_lm:str) -> tuple[str,dict]:
+def BOAccount_Get(CRM:SuiteCRM.SuiteCRM, id_conta_lm:str) -> dict:
     if id_conta_lm:
         resp = CRM.GetData("GCR_ContaBackoffice", filtro={'id_conta_lm': id_conta_lm})
         resposta = list()
@@ -367,9 +367,10 @@ def BOAccount_Get(CRM:SuiteCRM.SuiteCRM, id_conta_lm:str) -> tuple[str,dict]:
             if r['id_conta_lm'] != str(id_conta_lm):
                 continue
             resposta.append(r)
-        return None, resposta
+        return resposta
     else:
-        return "Sem informação", None
+        return None
+
 
 def BOAccount_Create(CRM:SuiteCRM.SuiteCRM, boaccount_data:dict) -> tuple[str,dict]:
     if boaccount_data:
