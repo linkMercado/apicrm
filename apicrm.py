@@ -62,6 +62,8 @@ def app_procedures(procedure):
         msg = ctl_procs.processa_arquivo_contatos(**args)
     elif procedure == "deleta_contratos":
         msg = ctl_procs.processa_arquivo_deleta_contratos(**args)
+    elif procedure == 'acerta_GC':
+         msg = ctl_procs.remove_GC_de_BOAccounts_sem_contrato_ativo()
     else:
         msg = f"Processo {procedure} não encontrado"
         status = 404

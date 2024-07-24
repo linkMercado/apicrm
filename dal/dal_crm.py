@@ -348,6 +348,12 @@ def Contract_AssociaGruposSeguranca(CRM:SuiteCRM.SuiteCRM, crm_contract_id:str, 
     return CRM.AssociateData("contracts", base_record_id=crm_contract_id, relate_module="security-groups", relate_record_ids=crm_sec_grup_ids)
     
 
+def Contract_RemoveGrupoSeguranca(CRM:SuiteCRM.SuiteCRM, contract_id:str, grupos:str) -> None:
+    if grupos:
+        for sec_g in grupos.split(','):
+            _ = CRM.Desassocia(base_module="contracts", base_record_id=contract_id, relate_module="security-groups", relate_record_id=sec_g)
+
+
 def Ticket_Create(CRM:SuiteCRM.SuiteCRM, ticket_data:dict) -> tuple[str,dict]:
     if ticket_data:
         return CRM.PostData("tickets", parametros=ticket_data)
@@ -380,11 +386,11 @@ def BOAccount_Create(CRM:SuiteCRM.SuiteCRM, boaccount_data:dict) -> tuple[str,di
 
 def BOAccount_Update(CRM:SuiteCRM.SuiteCRM, contaBO_data:dict) -> tuple[str,dict]:
     if contaBO_data:
-        return None, CRM.PutData("GCR_ContaBackoffice", parametros=contaBO_data)
+        return CRM.PutData("GCR_ContaBackoffice", parametros=contaBO_data)
     else:
         return "Sem informação", None
     
-    
+
 def BOAccount_RemoveGrupoSeguranca(CRM:SuiteCRM.SuiteCRM, bo_account_id:str, grupos:str) -> None:
     if grupos:
         for sec_g in grupos.split(','):
@@ -404,7 +410,7 @@ def BOAccount_getContracts(CRM:SuiteCRM.SuiteCRM, bo_account_id:str) -> list:
     if contracts and len(contracts) > 0:
         return contracts
     else:
-        return None
+        return []
 
 
 def Task_Create(CRM:SuiteCRM.SuiteCRM, task_data:dict) -> tuple[str,dict]:
