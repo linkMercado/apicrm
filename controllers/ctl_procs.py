@@ -1231,7 +1231,6 @@ def processa_arquivo_contas(file_path:str, skiplines:int=0):
                 logger.info(f"Header carregado:{headers}")
             else:
                 if row_num >= skiplines:
-                    print(row_num)
                     dado = row
                     if len(dado) != len(headers):
                         logger.info(f"linha:{row_num} - Quantidade de campos:{len(dado)} desta linha difere do header:{len(headers)}")
