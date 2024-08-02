@@ -792,6 +792,12 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
         account_data['gerente_relacionamento_name'] = gerente_relacionamento_name.upper()
         gerente_relacionamento_name = account_data['gerente_relacionamento_name']
 
+    if bu_nova and not representante_comercial_name:
+        return "Representante Comercial [representante_comercial] não informado"
+
+    if bu_nova and not gerente_relacionamento_name:
+        return "Gerente de Conta [gerente_conta] não informado"
+
     # Nome Fantasia ?
     if bu_nova and not account_data.get('name'):
         return "Nome Fantasia [name] não informado"
@@ -803,6 +809,12 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
 
     # id_conta_lm ?
     id_conta_lm = ajusta_dict(account_data, 'id_conta_lm_c', 'id_conta_lm')
+    if not id_conta_lm:
+        if bu_nova:
+            return "BOAccount [id_contalm] não informado"
+        else:
+            id_conta_lm = crm_BU.get('id_conta_lm_c')
+
     if bu_nova and not id_conta_lm:
         return "BOAccount [id_contalm] não informado"
 
@@ -811,16 +823,21 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
     if BOAccount:
         if len(BOAccount) == 1:
             BOAccount = BOAccount[0]
+            # pega os ids do RC e do GC e os grupos de segurança
+            RC_id = BOAccount['assigned_user_id']
+            GC_id = BOAccount.get('users_gcr_contabackoffice_1users_ida')
+            sec_grupo = pegaIDs_grupos_seguranca(CRM, RC_id=RC_id, GC_id=GC_id, ER_id=None)
         elif len(BOAccount) > 1:
             logger.critical(f"BOAccount: Encontrado {len(BOAccount)} registros com id_conta_lm={id_conta_lm}")
             return f"BOAccount: Encontrado {len(BOAccount)} registros com id_conta_lm={id_conta_lm}"
 
-    # paga os ids do RC e do GC e os grupos de segurança
-    RC_id, GC_id, _ = descobreIDs_RC_GC_ER(CRM, RC_name=representante_comercial_name, GC_name=gerente_relacionamento_name, ER_name=None)
-    sec_grupo = pegaIDs_grupos_seguranca(CRM, RC_id=RC_id, GC_id=GC_id, ER_id=None)
 
     # É para criar o BOAccount ?
     if not BOAccount:
+        # pega os ids do RC e do GC e os grupos de segurança
+        RC_id, GC_id, _ = descobreIDs_RC_GC_ER(CRM, RC_name=representante_comercial_name, GC_name=gerente_relacionamento_name, ER_name=None)
+        sec_grupo = pegaIDs_grupos_seguranca(CRM, RC_id=RC_id, GC_id=GC_id, ER_id=None)
+
         # cria BOAccount
         s, BOAccount = cria_BOconta(CRM,
                                     name=account_data.get('name'), 
@@ -833,15 +850,14 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
             # não foi possível criar a BOAccount
             return s
 
-    # indica o BOAccount
-    account_data['gcr_contabackoffice_accountsgcr_contabackoffice_ida'] = BOAccount['id'] 
-    # indica o RC
-    account_data['assigned_user_id'] = RC_id
-    # indica o GC
-    account_data['gerente_relacionamento_id'] = GC_id
-
     # É para criar a BU ?:
     if not crm_BU:
+        # indica o BOAccount
+        account_data['gcr_contabackoffice_accountsgcr_contabackoffice_ida'] = BOAccount['id'] 
+        # indica o RC
+        account_data['assigned_user_id'] = RC_id
+        # indica o GC
+        account_data['gerente_relacionamento_id'] = GC_id
         s, crm_BU = dal_crm.Account_Create(CRM, account_data)
         # criou ?
         if s:
@@ -868,7 +884,7 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
         old_sec_grupo = pegaIDs_grupos_seguranca(CRM, RC_id=old_RC_id, GC_id=old_GC_id, ER_id=None)
         dal_crm.BOAccount_RemoveGrupoSeguranca(CRM, BOAccount['id'], grupos=old_sec_grupo)
 
-        # atuliza RC e GC do BOAccount           
+        # atualiza RC e GC do BOAccount           
         s, _ = dal_crm.BOAccount_Update(CRM, {'id': BOAccount['id'], 
                                             'assigned_user_id': RC_id, 
                                             'gerente_relacionamento_id': GC_id,
