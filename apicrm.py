@@ -235,7 +235,7 @@ def app_notification():
     return Response(json.dumps(resp, default=DefaultConv), mimetype='application/json', status=resp_status) 
 
 
-@app.route('/crm/<module>', methods=['GET', 'POST', 'PUT', 'DELETE'])
+@app.route('/crm/<module>', methods=['GET']) # ['GET', 'POST', 'PUT', 'DELETE'])
 @logar
 def app_crm(module):
     if request.method == 'GET':

@@ -43,37 +43,15 @@ def GetObject(CRM:SuiteCRM.SuiteCRM, module:str, filtro:dict=dict()) -> tuple[bo
     return True, { 'data': CRM.GetData(module, filtro=filtro) }
 
 
-def Accounts(CRM) -> dict:
+def Accounts(CRM) -> list[dict]:
     return CRM.GetData("accounts", filtro={})
     
 
-def Account_Get(CRM:SuiteCRM.SuiteCRM, id:str=None, id_conta_lm:str=None, buid:str=None, id_cliente:str=None, status:str=None) -> dict:
-    filtro = dict()
-    if id:
-        filtro['id'] = id
-    if id_conta_lm:
-        filtro['id_conta_lm_c'] = str(id_conta_lm)
-    if id_cliente:
-        filtro['id_cliente_c'] = str(id_cliente)
-    if buid:
-        filtro['bu_id_c'] = str(buid)
-    if status:
-        filtro['status_c'] = status
-    resp = CRM.GetData("accounts", filtro=filtro)
-    resposta = list()
-    for r in resp:
-        if id and r['id'] == id:
-            return resp
-        elif id_conta_lm and r['id_conta_lm_c'] != str(id_conta_lm):
-            continue
-        elif id_cliente and r['id_cliente_c'] != str(id_cliente):
-            continue
-        elif buid and r['bu_id_c'] != str(buid):
-            continue
-        elif status and r['status_c'] != str(status):
-            continue
-        resposta.append(r)
-    return resposta
+def Account_Get(CRM:SuiteCRM.SuiteCRM, filtro:dict) -> list[dict]:
+    if filtro:
+        return CRM.GetData("accounts", filtro=filtro)
+    else:
+        return list()
 
 
 def Account_Create(CRM:SuiteCRM.SuiteCRM, account_data:dict) -> tuple[str,dict]:
@@ -100,7 +78,7 @@ def Account_Update(CRM:SuiteCRM.SuiteCRM, account_data:dict) -> tuple[str,dict]:
         return "Sem informação", None
 
 
-def Account_RemoveGrupoSeguranca(CRM:SuiteCRM.SuiteCRM, account_id:str, grupos:str):
+def Account_RemoveGrupoSeguranca(CRM:SuiteCRM.SuiteCRM, account_id:str, grupos:str) -> None:
     if grupos:
         for sec_g in grupos.split(','):
             _ = CRM.Desassocia(base_module="accounts", base_record_id=account_id, relate_module="security-groups", relate_record_id=sec_g)
@@ -120,7 +98,7 @@ def Account_Delete(CRM:SuiteCRM.SuiteCRM, crm_id:str) -> bool:
         return False
 
 
-def Account_getContacts(CRM:SuiteCRM.SuiteCRM, account_id:str):
+def Account_getContacts(CRM:SuiteCRM.SuiteCRM, account_id:str) -> list[dict]:
     contacts = CRM.GetSubPanelData(parentModule="accounts", parentId=account_id, module="contacts", subpanel="contacts")
     if contacts and len(contacts) > 0:
         return contacts
@@ -128,7 +106,7 @@ def Account_getContacts(CRM:SuiteCRM.SuiteCRM, account_id:str):
         return None
 
 
-def User_Get(CRM:SuiteCRM.SuiteCRM, id:str=None, username:str=None, email:str=None) -> dict:
+def User_Get(CRM:SuiteCRM.SuiteCRM, id:str=None, username:str=None, email:str=None) -> list[dict]:
     if username:
         if '.' in username:
             filtro = {"user_name": username}
@@ -148,89 +126,9 @@ def User_Get(CRM:SuiteCRM.SuiteCRM, id:str=None, username:str=None, email:str=No
         return None
 
 
-def Contact_Get(CRM:SuiteCRM.SuiteCRM, id:str=None, fname:str=None, lname:str=None, email:str=None, document:str=None, phone_work:str=None, mobile_phone:str=None, whatsapp:str=None) -> list[dict]:
-    filtro = dict()
-    if id:
-        filtro['id'] = id
-    if fname:
-        filtro['first_name'] = fname
-        __fname = re.sub('[^a-zA-Z0-9]', '', fname)
-    else:
-        __fname = None
-    if lname:
-        filtro['last_name'] = lname
-        __lname = re.sub('[^a-zA-Z0-9]', '', lname)
-    else:
-        __lname = None
-    if email:
-        filtro['email'] = email
-        __email = email
-    else:
-        __email = None
-    if document:
-        filtro['cpf_c'] = document
-        __document = re.sub('[^0-9]', '', document)
-    else:
-        __document = None
-    if phone_work:
-        filtro['phone_work'] = SuiteCRM.format_phone(phone_work)
-        __phone = SuiteCRM.format_phone(phone_work)
-    else:
-        __phone = None
-    if mobile_phone:
-        filtro['phone_mobile'] = mobile_phone
-        __mobile_phone = SuiteCRM.format_phone(mobile_phone, internacional=True)
-    else:
-        __mobile_phone = None
-    if whatsapp:
-        filtro['phone_fax'] = whatsapp
-        __whatsapp = SuiteCRM.format_phone(whatsapp, internacional=True)
-    else:
-        __whatsapp = None
+def Contact_Get(CRM:SuiteCRM.SuiteCRM, filtro:dict) -> list[dict]:
     if filtro:
-        # calclula nota máxima
-        max_nota = 0
-        max_nota += 1 if id else 0
-        max_nota += 1 if fname or lname else 0
-        max_nota += 1 if email else 0
-        max_nota += 1 if document else 0
-        max_nota += 1 if phone_work else 0
-        max_nota += 1 if mobile_phone else 0
-        max_nota += 1 if whatsapp else 0
-
-        crm_contatos = CRM.GetData("contacts", filtro=filtro)
-        # se retornou mais de um, qual dos contatos ?
-        resp = list()
-        for crm_contato in crm_contatos if crm_contatos else []:
-            nota = 0 
-            # se FirstName e LastName forem informados, ambos tem que ser iguais
-            _fname = crm_contato.get('first_name','')
-            _lname = crm_contato.get('last_name','')
-            if _fname and __fname and _lname and __lname:
-                if (__fname and (re.sub('[^a-zA-Z0-9]', '', _fname).upper() == __fname.upper())) \
-                   and (__lname and (re.sub('[^a-zA-Z0-9]', '', _lname).upper() == __lname.upper())):
-                    nota = 1
-                else:
-                    continue
-            nota += 1 if id == crm_contato['id'] else 0
-            nota += 1 if __document and re.sub('[^0-9]', '', crm_contato.get('cpf_c','')) == __document else 0
-            nota += 1 if __email and crm_contato.get('email1') == __email else 0
-            nota += 1 if __phone and SuiteCRM.format_phone(crm_contato.get('phone_work'), internacional=True) == __phone else 0
-            nota += 1 if __mobile_phone and SuiteCRM.format_phone(crm_contato.get('mobile_phone'), internacional=True) == __mobile_phone else 0
-            nota += 1 if __whatsapp and SuiteCRM.format_phone(crm_contato.get('phone_fax'), internacional=True) == __whatsapp else 0
-            if nota > 1 or nota == max_nota:
-                achou = False
-                for r in resp:
-                    achou = achou or (r['id'] == crm_contato['id'])
-                    if achou:
-                        break
-                if not achou:
-                    resp.append(crm_contato)
-        if len(resp) > 1:
-            # por enquanfo, quando tem mais de um, diz que tem nenhum
-            logger.warning(f"Vários contatos com a chave: fname={fname}, lname={lname}, email={email}, document={document}, phone_work={phone_work}, mobile_phone={mobile_phone}, whatsapp={whatsapp}")
-            resp = list()
-        return resp
+        return CRM.GetData("contacts", filtro=filtro)
     else:
         return []
 
@@ -275,28 +173,11 @@ def Contact_AssociaAccounts(CRM:SuiteCRM.SuiteCRM, crm_contact_id:str, crm_accou
     return CRM.AssociateData("contacts", base_record_id=crm_contact_id, relate_module="accounts", relate_record_ids=crm_account_id)
 
 
-def Contract_Get(CRM:SuiteCRM.SuiteCRM, id:str=None, name:str=None, numero:str=None) -> dict:
-    filtro = dict()
-    if id:
-        filtro['id'] = id
-    if name:
-        filtro['name'] = name
-    if numero:
-        filtro['reference_code'] = numero
+def Contract_Get(CRM:SuiteCRM.SuiteCRM, filtro:dict) -> list[dict]:
     if filtro:       
-        resp = CRM.GetData("AOS_Contracts", filtro=filtro)
-        resposta = list()
-        for r in resp:
-            if id and r['id'] != id:
-                continue
-            if name and r['name'] != name:
-                continue
-            if numero and r['reference_code'] != numero:
-                continue
-            resposta.append(r)
-        return resposta    
+        return CRM.GetData("AOS_Contracts", filtro=filtro)
     else:
-        return None
+        return list()
 
 
 def Contract_Create(CRM:SuiteCRM.SuiteCRM, contract_data:dict) -> tuple[str,dict]:
@@ -361,21 +242,15 @@ def Ticket_Create(CRM:SuiteCRM.SuiteCRM, ticket_data:dict) -> tuple[str,dict]:
         return "Sem informação", None
 
 
-def BOAccounts(CRM) -> dict:
+def BOAccounts(CRM) -> list[dict]:
     return CRM.GetData("GCR_ContaBackoffice", filtro={})
     
 
-def BOAccount_Get(CRM:SuiteCRM.SuiteCRM, id_conta_lm:str) -> dict:
-    if id_conta_lm:
-        resp = CRM.GetData("GCR_ContaBackoffice", filtro={'id_conta_lm': id_conta_lm})
-        resposta = list()
-        for r in resp:
-            if r['id_conta_lm'] != str(id_conta_lm):
-                continue
-            resposta.append(r)
-        return resposta
+def BOAccount_Get(CRM:SuiteCRM.SuiteCRM, filtro:dict) -> list[dict]:
+    if filtro:
+        return CRM.GetData("GCR_ContaBackoffice", filtro=filtro)
     else:
-        return None
+        return list()
 
 
 def BOAccount_Create(CRM:SuiteCRM.SuiteCRM, boaccount_data:dict) -> tuple[str,dict]:
@@ -383,6 +258,7 @@ def BOAccount_Create(CRM:SuiteCRM.SuiteCRM, boaccount_data:dict) -> tuple[str,di
         return CRM.PostData("GCR_ContaBackoffice", parametros=boaccount_data)
     else:
         return "Sem informação", None
+
 
 def BOAccount_Update(CRM:SuiteCRM.SuiteCRM, contaBO_data:dict) -> tuple[str,dict]:
     if contaBO_data:
@@ -397,12 +273,12 @@ def BOAccount_RemoveGrupoSeguranca(CRM:SuiteCRM.SuiteCRM, bo_account_id:str, gru
             _ = CRM.Desassocia(base_module="GCR_ContaBackoffice", base_record_id=bo_account_id, relate_module="security-groups", relate_record_id=sec_g)
 
 
-def BOAccount_getAccounts(CRM:SuiteCRM.SuiteCRM, bo_account_id:str) -> list:
+def BOAccount_getAccounts(CRM:SuiteCRM.SuiteCRM, bo_account_id:str) -> list[dict]:
     accounts = CRM.GetSubPanelData(parentModule="GCR_ContaBackoffice", parentId=bo_account_id, module="accounts", subpanel="gcr_contabackoffice_accounts")
     if accounts and len(accounts) > 0:
         return accounts
     else:
-        return None
+        return list()
 
 
 def BOAccount_getContracts(CRM:SuiteCRM.SuiteCRM, bo_account_id:str) -> list:
@@ -439,6 +315,7 @@ def Account_AssociaContatos(CRM:SuiteCRM.SuiteCRM, crm_account_id:str, crm_conta
 
 def Account_AssociaContracts(CRM:SuiteCRM.SuiteCRM, crm_account_id:str, crm_contract_ids:str) -> bool:
     return CRM.AssociateData("accounts", base_record_id=crm_account_id, relate_module="contracts", relate_record_ids=crm_contract_ids)
+
 
 def Account_AssociaGruposSeguranca(CRM:SuiteCRM.SuiteCRM, crm_account_id:str, crm_sec_grup_ids:str) -> bool:
     return CRM.AssociateData("accounts", base_record_id=crm_account_id, relate_module="security-groups", relate_record_ids=crm_sec_grup_ids)

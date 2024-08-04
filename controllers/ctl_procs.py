@@ -13,6 +13,173 @@ from dal import dal_crm
 
 WATSON_UserID = 'a2fc0fc9-cb48-39c3-2bb2-658b42a377d7'
 
+def GetBOAccount(CRM:SuiteCRM.SuiteCRM, id:str=None, id_conta_lm:str=None) -> dict:
+    if id:
+        filtro = { 'id': id}
+    elif id_conta_lm:
+        filtro = { 'id_conta_lm': id_conta_lm}
+    else:
+        filtro = None
+    if filtro:
+        if not CRM:
+            CRM = SuiteCRM.SuiteCRM(logger)
+        resp = dal_crm.BOAccount_Get(CRM, filtro)
+        resposta = list()
+        for r in resp:
+            if r['id_conta_lm'] != str(id_conta_lm):
+                continue
+            resposta.append(r)
+        return resposta
+    else:
+        return dict()
+
+
+def GetContact(CRM:SuiteCRM.SuiteCRM, id:str=None, fname:str=None, lname:str=None, email:str=None, document:str=None, phone_work:str=None, mobile_phone:str=None, whatsapp:str=None) -> list[dict]:
+    if not CRM:
+        CRM = SuiteCRM.SuiteCRM(logger)
+    filtro = dict()
+    if id:
+        filtro['id'] = id
+    if fname:
+        filtro['first_name'] = fname
+        __fname = re.sub('[^a-zA-Z0-9]', '', fname)
+    else:
+        __fname = None
+    if lname:
+        filtro['last_name'] = lname
+        __lname = re.sub('[^a-zA-Z0-9]', '', lname)
+    else:
+        __lname = None
+    if email:
+        filtro['email'] = email
+        __email = email
+    else:
+        __email = None
+    if document:
+        filtro['cpf_c'] = document
+        __document = re.sub('[^0-9]', '', document)
+    else:
+        __document = None
+    if phone_work:
+        filtro['phone_work'] = SuiteCRM.format_phone(phone_work)
+        __phone = SuiteCRM.format_phone(phone_work)
+    else:
+        __phone = None
+    if mobile_phone:
+        filtro['phone_mobile'] = mobile_phone
+        __mobile_phone = SuiteCRM.format_phone(mobile_phone, internacional=True)
+    else:
+        __mobile_phone = None
+    if whatsapp:
+        filtro['phone_fax'] = whatsapp
+        __whatsapp = SuiteCRM.format_phone(whatsapp, internacional=True)
+    else:
+        __whatsapp = None
+    if filtro:
+        # calclula nota máxima
+        max_nota = 0
+        max_nota += 1 if id else 0
+        max_nota += 1 if fname or lname else 0
+        max_nota += 1 if email else 0
+        max_nota += 1 if document else 0
+        max_nota += 1 if phone_work else 0
+        max_nota += 1 if mobile_phone else 0
+        max_nota += 1 if whatsapp else 0
+
+        crm_contatos = dal_crm.Contact_Get(CRM, filtro=filtro)
+        # se retornou mais de um, qual dos contatos ?
+        resp = list()
+        for crm_contato in crm_contatos if crm_contatos else []:
+            nota = 0 
+            # se FirstName e LastName forem informados, ambos tem que ser iguais
+            _fname = crm_contato.get('first_name','')
+            _lname = crm_contato.get('last_name','')
+            if _fname and __fname and _lname and __lname:
+                if (__fname and (re.sub('[^a-zA-Z0-9]', '', _fname).upper() == __fname.upper())) \
+                   and (__lname and (re.sub('[^a-zA-Z0-9]', '', _lname).upper() == __lname.upper())):
+                    nota = 1
+                else:
+                    continue
+            nota += 1 if id == crm_contato['id'] else 0
+            nota += 1 if __document and re.sub('[^0-9]', '', crm_contato.get('cpf_c','')) == __document else 0
+            nota += 1 if __email and crm_contato.get('email1') == __email else 0
+            nota += 1 if __phone and SuiteCRM.format_phone(crm_contato.get('phone_work'), internacional=True) == __phone else 0
+            nota += 1 if __mobile_phone and SuiteCRM.format_phone(crm_contato.get('mobile_phone'), internacional=True) == __mobile_phone else 0
+            nota += 1 if __whatsapp and SuiteCRM.format_phone(crm_contato.get('phone_fax'), internacional=True) == __whatsapp else 0
+            if nota > 1 or nota == max_nota:
+                achou = False
+                for r in resp:
+                    achou = achou or (r['id'] == crm_contato['id'])
+                    if achou:
+                        break
+                if not achou:
+                    resp.append(crm_contato)
+        if len(resp) > 1:
+            # por enquanfo, quando tem mais de um, diz que tem nenhum
+            logger.warning(f"Vários contatos com a chave: fname={fname}, lname={lname}, email={email}, document={document}, phone_work={phone_work}, mobile_phone={mobile_phone}, whatsapp={whatsapp}")
+            resp = list()
+        return resp
+    else:
+        return list()
+
+
+def GetAccount(CRM:SuiteCRM.SuiteCRM, id:str=None, id_conta_lm:str=None, buid:str=None, id_cliente:str=None, status:str=None) -> list[dict]:
+    resposta = list()
+    filtro = dict()
+    if id:
+        filtro['id'] = id
+    if id_conta_lm:
+        filtro['id_conta_lm_c'] = str(id_conta_lm)
+    if id_cliente:
+        filtro['id_cliente_c'] = str(id_cliente)
+    if buid:
+        filtro['bu_id_c'] = str(buid)
+    if status:
+        filtro['status_c'] = status
+    if filtro:
+        if not CRM:
+            CRM = SuiteCRM.SuiteCRM(logger)
+        resp = dal_crm.Account_Get(CRM, filtro=filtro)
+        for r in resp:
+            if id and r['id'] == id:
+                return resp
+            elif id_conta_lm and r['id_conta_lm_c'] != str(id_conta_lm):
+                continue
+            elif id_cliente and r['id_cliente_c'] != str(id_cliente):
+                continue
+            elif buid and r['bu_id_c'] != str(buid):
+                continue
+            elif status and r['status_c'] != str(status):
+                continue
+            resposta.append(r)
+    return resposta
+
+
+def GetContract(CRM:SuiteCRM.SuiteCRM, id:str=None, name:str=None, numero:str=None) -> list[dict]:
+    filtro = dict()
+    if id:
+        filtro['id'] = id
+    if name:
+        filtro['name'] = name
+    if numero:
+        filtro['reference_code'] = numero
+    if filtro:       
+        if not CRM:
+            CRM = SuiteCRM.SuiteCRM(logger)
+        resp = dal_crm.Contract_Get(CRM, filtro=filtro)
+        resposta = list()
+        for r in resp:
+            if id and r['id'] != id:
+                continue
+            if name and r['name'] != name:
+                continue
+            if numero and r['reference_code'] != numero:
+                continue
+            resposta.append(r)
+        return resposta    
+    else:
+        return list()
+
 
 def sync_BO2CRM_Account(account_id:str, userid:str=None, crm_user_id:str=None, gerente_relacionamento:str=None) -> tuple[dict, dict]:
     return dict(), dict()
@@ -340,7 +507,7 @@ def sync_BO2CRM_BUsBeneficiadas() -> tuple[dict, dict]:
             contratoX = budata.get('contrato_expandido')
 
             # pega o Contrato que beneficia essa BU
-            crm_contract = dal_crm.Contract_Get(CRM, numero=contrato)
+            crm_contract = GetContract(CRM, numero=contrato)
             if not crm_contract or len(crm_contract) == 0:
                 logger.critical(f"O Contrato {contrato} não está no CRM")
                 continue
@@ -351,12 +518,12 @@ def sync_BO2CRM_BUsBeneficiadas() -> tuple[dict, dict]:
             suite_ids[bu_id] = suite_id
             
             # está no CRM ?
-            crm_bu = dal_crm.Account_Get(CRM, buid=bu_id)
+            crm_bu = GetAccount(CRM, buid=bu_id)
             if not crm_bu:
                 # tentativa por endereço, dentro do mesmo id_conta_lm
                 _endereco = re.sub('[^a-zA-Z0-9]', '', mod_crm.Account._endereco(budata.get('street_type'), budata.get('street'), budata.get('house_number'), budata.get('additional_address')))
                 k, _k, _crm_bu = 0, 0, None
-                crm_bus = dal_crm.Account_Get(CRM, id_conta_lm=id_conta_lm)
+                crm_bus = GetAccount(CRM, id_conta_lm=id_conta_lm)
                 for crm_bu in crm_bus if crm_bus else []:
                     if _endereco == re.sub('[^a-zA-Z0-9]', '', account_data['billing_address_street']):
                         k += 1
@@ -440,16 +607,13 @@ def sync_BO2CRM_BUsBeneficiadas() -> tuple[dict, dict]:
 
     return respostas, suite_ids
 
-#JB
-#z = sync_BO2CRM_BUsBeneficiadas()
-#print(z)
 
 def sync_CRM2BO_Account() -> tuple[str: dict]:
     msg_tec:str = ""
     suite_ids = dict()
     CRM = SuiteCRM.SuiteCRM(logger)
 
-    crm_accounts = dal_crm.Account_Get(CRM, id=None)
+    crm_accounts = GetAccount(CRM, id=None)
     bo_account_ids = dict()
     for crm_account in crm_accounts:
         buid = crm_account.get('bu_id_c')
@@ -479,7 +643,6 @@ def sync_CRM2BO_Account() -> tuple[str: dict]:
     return resp, suite_ids
 
 
-
 def trata_contatos(CRM, suite_id:str, contatos:list=list()) -> dict:
     def GetContato(k):
         __name = k.get('nome') if k.get('nome') else k.get('name')
@@ -489,7 +652,7 @@ def trata_contatos(CRM, suite_id:str, contatos:list=list()) -> dict:
         __phone = SuiteCRM.format_phone(k.get('phone'), internacional=True)
         __mobile_phone = SuiteCRM.format_phone(k.get('mobile_phone'), internacional=True)
         # verifica se autorizador está no CRM
-        return dal_crm.Contact_Get(CRM, name=__name, email=__email, document=__document, phone_work=__phone, mobile_phone=__mobile_phone)
+        return GetContact(CRM, name=__name, email=__email, document=__document, phone_work=__phone, mobile_phone=__mobile_phone)
 
     lista_contatos:str = ''
     for contato in contatos:
@@ -512,9 +675,9 @@ def trata_contratos(CRM, suite_id:str, contratos) -> None:
         __numero = None
         __name = None
         if (__numero:=k.get('reference_code')):
-            crm_contratos = dal_crm.Contract_Get(CRM, numero=__numero)
+            crm_contratos = GetContract(CRM, numero=__numero)
         elif (__name:=k.get('name')):
-            crm_contratos = dal_crm.Contract_Get(CRM, name=__name)
+            crm_contratos = GetContract(CRM, name=__name)
         # verifica se está no CRM
         _crm_contrato = None
         if crm_contratos:
@@ -560,7 +723,7 @@ def _infosComuns(CRM, suite_id:str, entity_data:dict):
             _dados["parent_id"] = conta_mestre
         if _dados:
             # força todas as crm_contas a ter o mesmo Representante e/ou Gerente
-            for conta in dal_crm.Account_Get(CRM, id_conta_lm=id_conta_lm):
+            for conta in GetAccount(CRM, id_conta_lm=id_conta_lm):
                 _dados["id"] = conta.get('id')
                 if _dados["id"] != suite_id:
                     _s, _d = dal_crm.PutObject(CRM, module="accounts", entity_data=_dados)
@@ -759,7 +922,7 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
         return "BU [id_cliente] não informado"
 
     # pega a BU com esse id_cliente
-    crm_BU = dal_crm.Account_Get(CRM, id_cliente=id_cliente)
+    crm_BU = GetAccount(CRM, id_cliente=id_cliente)
     if crm_BU:
         if len(crm_BU) == 1:
             crm_BU = crm_BU[0]
@@ -819,7 +982,7 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
         return "BOAccount [id_contalm] não informado"
 
     # pega o BOAccounts com esse id_conta_lm
-    BOAccount = dal_crm.BOAccount_Get(CRM, id_conta_lm=id_conta_lm)
+    BOAccount = GetBOAccount(CRM, id_conta_lm=id_conta_lm)
     if BOAccount:
         if len(BOAccount) == 1:
             BOAccount = BOAccount[0]
@@ -920,11 +1083,11 @@ def sync_contact(CRM:SuiteCRM.SuiteCRM=None, contact_data:dict=dict()) -> str:
         return False
     
     def existe_email(email:str):
-        _contatos = dal_crm.Contact_Get(CRM, email=email)
+        _contatos = GetContact(CRM, email=email)
         return _contatos and len(crm_contatos) == 1
 
     def existe_documento(doc:str):
-        _contatos = dal_crm.Contact_Get(CRM, document=doc)
+        _contatos = GetContact(CRM, document=doc)
         return _contatos and len(crm_contatos) == 1
 
     def contact_merge(contact_data:dict, crm_contato:dict):
@@ -994,7 +1157,7 @@ def sync_contact(CRM:SuiteCRM.SuiteCRM=None, contact_data:dict=dict()) -> str:
     if id_cliente:
         del contact_data['id_cliente_c']
         # verifica se a BU existe
-        crm_account = dal_crm.Account_Get(CRM, id_cliente=id_cliente)
+        crm_account = GetAccount(CRM, id_cliente=id_cliente)
         if crm_account:
             if len(crm_account) != 1:
                 logger.debug(f"BU: forma encontradas {len(crm_account) if crm_account else 0} BUs com id_cliente={id_cliente}")
@@ -1032,13 +1195,13 @@ def sync_contact(CRM:SuiteCRM.SuiteCRM=None, contact_data:dict=dict()) -> str:
     # 3) Busca por
     crm_contato = None
     if contact_data.get('cpf_c'):
-        crm_contatos = dal_crm.Contact_Get(CRM, document=contact_data.get('cpf_c'))
+        crm_contatos = GetContact(CRM, document=contact_data.get('cpf_c'))
         if crm_contatos and len(crm_contatos) == 1:
             crm_contato = crm_contatos[0]
 
     # busca por email ?
     if (not crm_contato) and contact_data.get('email1'):
-        crm_contatos = dal_crm.Contact_Get(CRM, email=contact_data.get('email1'))
+        crm_contatos = GetContact(CRM, email=contact_data.get('email1'))
         if crm_contatos and len(crm_contatos) == 1:
             crm_contato = crm_contatos[0]
 
@@ -1050,7 +1213,7 @@ def sync_contact(CRM:SuiteCRM.SuiteCRM=None, contact_data:dict=dict()) -> str:
                               contact_data.get('phone_mobile')
                             ):
         # busca por nome e telefones
-        crm_contatos = dal_crm.Contact_Get(CRM, 
+        crm_contatos = GetContact(CRM, 
                                            fname=contact_data.get('first_name'),
                                            lname=contact_data.get('last_name'),
                                            phone_work=contact_data.get('phone_work'),
@@ -1078,7 +1241,7 @@ def sync_contact(CRM:SuiteCRM.SuiteCRM=None, contact_data:dict=dict()) -> str:
     # dal_crm.Contact_AssociaAccounts(CRM, k['id'], crm_account['id'])
 
     # coloca o contato também na conta BO ?
-    BOAccount = dal_crm.BOAccount_Get(CRM, id_conta_lm=crm_account['id_conta_lm_c'])
+    BOAccount = GetBOAccount(CRM, id_conta_lm=crm_account['id_conta_lm_c'])
     if BOAccount:
         if len(BOAccount) != 1:
             logger.debug(f"BOAcccount: foram encontratos {len(BOAccount)} registros no CRM para id_conta_lm={crm_account['id_conta_lm_c']}")
@@ -1143,7 +1306,7 @@ def sync_contract(CRM:SuiteCRM.SuiteCRM=None, contract_data:dict=dict()) -> str:
     # informou o número do contrato ?
     reference_code = ajusta_dict(contract_data, 'reference_code', 'numero_contrato')
     if reference_code:
-        crm_contrato = dal_crm.Contract_Get(CRM, numero=reference_code)
+        crm_contrato = GetContract(CRM, numero=reference_code)
         contrato_novo = (not crm_contrato) or (len(crm_contrato) == 0)
     else:
         return "Número do contrato [numero_contrato] não informado"
@@ -1167,8 +1330,11 @@ def sync_contract(CRM:SuiteCRM.SuiteCRM=None, contract_data:dict=dict()) -> str:
     if contrato_novo and not id_cliente:
         return "BU [id_cliente] não informado"
     else:
-        # pega a conta Contratante ?
-        ContaContratante = dal_crm.Account_Get(CRM, id_cliente=id_cliente)
+        if not contrato_novo and not id_cliente:
+            ContaContratante = GetAccount(CRM, id=crm_contrato.get('contract_account_id'))
+        else:
+            # pega a conta Contratante ?
+            ContaContratante = GetAccount(CRM, id_cliente=id_cliente)
         if not ContaContratante or len(ContaContratante) != 1:
             return f"BU Contratante: foram encontrados {len(ContaContratante) if ContaContratante else 0} registros no CRM com id_cliente={id_cliente} !"
         ContaContratante = ContaContratante[0]
@@ -1187,7 +1353,7 @@ def sync_contract(CRM:SuiteCRM.SuiteCRM=None, contract_data:dict=dict()) -> str:
         contract_data['end_date'] = data_cancelamento
 
     # pega a conta BO
-    BOAccount = dal_crm.BOAccount_Get(CRM, id_conta_lm)
+    BOAccount = GetBOAccount(CRM, id_conta_lm=id_conta_lm)
     if (not BOAccount) or len(BOAccount) != 1:
         return f"BOAccount: foram encontrados {len(BOAccount) if BOAccount else 0} registros no CRM com id_conta_lm={id_conta_lm} !"
     else:
@@ -1195,7 +1361,10 @@ def sync_contract(CRM:SuiteCRM.SuiteCRM=None, contract_data:dict=dict()) -> str:
 
     RC_id = BOAccount.get('assigned_user_id')
     GC_id = BOAccount.get('users_gcr_contabackoffice_1users_ida')
-    _, _, ER_id = descobreIDs_RC_GC_ER(CRM, RC_name=None, GC_name=None, ER_name=especialista_name)
+    if especialista_name:
+        _, _, ER_id = descobreIDs_RC_GC_ER(CRM, RC_name=None, GC_name=None, ER_name=especialista_name)
+    else:
+        ER_id = crm_contrato.get('users_aos_contracts_1users_ida')
 
     # coloca no contrato os grupos que podem ve-lo
     grupos_sec = pegaIDs_grupos_seguranca(CRM, RC_id=RC_id, GC_id=GC_id, ER_id=ER_id)
