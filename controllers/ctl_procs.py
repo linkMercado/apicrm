@@ -122,8 +122,42 @@ def GetContact(CRM:SuiteCRM.SuiteCRM, id:str=None, fname:str=None, lname:str=Non
     else:
         return list()
 
+def get_sync_contact(args:dict=dict()) -> list[dict]:
+    # verifica os parametros aceitos
+    id = None
+    fname = None
+    lname = None
+    email = None
+    document = None
+    phone_work = None
+    mobile_phone = None
+    whatsapp = None
+    for k, v in args.items():
+        if k == 'id':
+            id = v
+        elif k in ['first_name']:
+            fname = v
+        elif k in ['last_name']:
+            lname = v
+        elif k in ['email','email1']:
+            email = v
+        elif k in ['document']:
+            document = v
+        elif k in ['email','email1']:
+            email = v
+        elif k in ['phone_work']:
+            phone_work = v
+        elif k in ['mobile_phone','phone_mobile']:
+            mobile_phone = v
+        elif k in ['whatsapp','phone_whatsapp', 'whatsapp_phone']:
+            whatsapp = v
+    if id or fname or lname or email or document or phone_work or mobile_phone or whatsapp:
+        return GetContact(None, id=id, fname=fname, lname=lname, email=email, document=document, phone_work=phone_work, mobile_phone=mobile_phone, whatsapp=whatsapp)
+    return []
 
-def GetAccount(CRM:SuiteCRM.SuiteCRM, id:str=None, id_conta_lm:str=None, buid:str=None, id_cliente:str=None, status:str=None) -> list[dict]:
+
+
+def GetAccount(CRM:SuiteCRM.SuiteCRM, id:str=None, id_conta_lm:str=None, buid:str=None, id_cliente:str=None) -> list[dict]:
     resposta = list()
     filtro = dict()
     if id:
@@ -134,8 +168,6 @@ def GetAccount(CRM:SuiteCRM.SuiteCRM, id:str=None, id_conta_lm:str=None, buid:st
         filtro['id_cliente_c'] = str(id_cliente)
     if buid:
         filtro['bu_id_c'] = str(buid)
-    if status:
-        filtro['status_c'] = status
     if filtro:
         if not CRM:
             CRM = SuiteCRM.SuiteCRM(logger)
@@ -149,10 +181,29 @@ def GetAccount(CRM:SuiteCRM.SuiteCRM, id:str=None, id_conta_lm:str=None, buid:st
                 continue
             elif buid and r['bu_id_c'] != str(buid):
                 continue
-            elif status and r['status_c'] != str(status):
-                continue
             resposta.append(r)
     return resposta
+
+
+def get_sync_bu(args:dict=dict()) -> list[dict]:
+    # verifica os parametros aceitos
+    id = None
+    id_conta_lm = None
+    buid = None
+    id_cliente = None
+    for k, v in args.items():
+        if k == 'id':
+            id = v
+        elif k in ['id_conta_lm', 'id_conta_lm_c']:
+            id_conta_lm = v
+        elif k in ['buid', 'bu_id', 'bu_id_c', 'business_unit_id']:
+            buid = v
+        elif k in ['id_cliente','id_cliente_c']:
+            id_cliente = v
+    if id or id_conta_lm or buid or id_cliente:
+        return GetAccount(None, id=id, id_conta_lm=id_conta_lm, buid=buid, id_cliente=id_cliente)
+    else:
+        return []
 
 
 def GetContract(CRM:SuiteCRM.SuiteCRM, id:str=None, name:str=None, numero:str=None) -> list[dict]:
@@ -179,6 +230,24 @@ def GetContract(CRM:SuiteCRM.SuiteCRM, id:str=None, name:str=None, numero:str=No
         return resposta    
     else:
         return list()
+
+
+def get_sync_contract(args:dict=dict()) -> list[dict]:
+    # verifica os parametros aceitos
+    id = None
+    name = None
+    numero = None
+    for k, v in args.items():
+        if k == 'id':
+            id = v
+        elif k in ['name', 'nome']:
+            name = v
+        elif k in ['numero', 'reference_code', 'contrato']:
+            numero = v
+    if id or name or numero:
+        return GetContract(None, id=id, name=name, numero=numero)
+    else:
+        return []
 
 
 def sync_BO2CRM_Account(account_id:str, userid:str=None, crm_user_id:str=None, gerente_relacionamento:str=None) -> tuple[dict, dict]:

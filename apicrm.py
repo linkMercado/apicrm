@@ -94,11 +94,11 @@ def after_request_func(response: Response) -> Response:
 @cross_origin(origin='*',headers=['Content-Type','Authorization'])
 @logar
 def app_sync_module(module:str):
+    resp_status = None
+    msg = None
+
     if request.method == 'GET':
         args = request.args.to_dict()
-        args - None
-        resp_status = 400
-        msg = "Metodo não implementado"
     elif request.method in ['POST', 'PUT']:
         args = request.get_json()
     else:
@@ -107,18 +107,36 @@ def app_sync_module(module:str):
         msg = "Método não implementado"
 
     if args:
-        if module in ['account', 'bu']:
+        if request.method in ['GET']:
             resp_status = 200
-            msg = ctl_procs.sync_bu(account_data=args)
-        elif module in ['contract', 'contrato']:
+            mimetype = 'application/json'
+            if module in ['account', 'bu']:
+                resp = ctl_procs.get_sync_bu(args=args)
+            elif module in ['contract', 'contrato']:
+                resp = ctl_procs.get_sync_contract(args=args)
+            elif module in ['contact', 'contato']:
+                resp = ctl_procs.get_sync_contact(args=args)
+            else:
+                msg = "Módulo desconhecido"   
+            if not msg:
+                if resp:
+                    msg = json.dumps(resp, default=DefaultConv)
+                else:
+                    resp_status = 404
+                    mimetype = 'application/text'
+                    msg = "Nenhum registro encontrado"
+        elif request.method in ['POST', 'PUT']:
             resp_status = 200
-            msg = ctl_procs.sync_contract(contract_data=args)
-        elif module in ['contact', 'contato']:
-            resp_status = 200
-            msg = ctl_procs.sync_contact(contract_data=args)
+            mimetype = 'application/text'
+            if module in ['account', 'bu']:
+                msg = ctl_procs.sync_bu(account_data=args)
+            elif module in ['contract', 'contrato']:
+                msg = ctl_procs.sync_contract(contract_data=args)
+            elif module in ['contact', 'contato']:
+                msg = ctl_procs.sync_contact(contract_data=args)
 
     LOGGER.debug(f"sync_{module}, s:{resp_status} m:{msg}")
-    return Response(msg, status=resp_status) 
+    return Response(msg, mimetype=mimetype, status=resp_status) 
 
 
 @app.route('/crm/sync/xaccount', methods=[ 'GET', 'POST', 'PUT'])
