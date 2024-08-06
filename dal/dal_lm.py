@@ -289,3 +289,8 @@ def GetCRMIdContaLM_Contacts() -> dict:
         """
     resp = mysql_pool.execute(cmd, cursor_args={"buffered": True, "dictionary": True}, commit=False)
     return resp
+
+
+def Atualiza_BUsBeneficiadas() -> None:
+    cmd = f"suitecrm.sp_AtualizaBUsBeneficiadas"
+    mysql_pool.execute(cmd, cursor_args={"buffered": True, "dictionary": True}, callproc=True, commit=True)

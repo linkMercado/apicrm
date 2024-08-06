@@ -224,7 +224,7 @@ def GetContract(CRM:SuiteCRM.SuiteCRM, id:str=None, name:str=None, numero:str=No
                 continue
             if name and r['name'] != name:
                 continue
-            if numero and r['reference_code'] != numero:
+            if numero and r['reference_code'] != str(numero):
                 continue
             resposta.append(r)
         return resposta    
@@ -544,138 +544,13 @@ def sync_BO2CRM_Account(account_id:str, userid:str=None, crm_user_id:str=None, g
     """
 
 
-def sync_BO2CRM_BUsBeneficiadas() -> tuple[dict, dict]:
+def sync_BO2CRM_BUsBeneficiadas() -> None:
     """
       Atualiza as BUs 'beneficiadas' no CRM
     """
-    CRM = SuiteCRM.SuiteCRM(logger)     
-    respostas:dict = dict()
-    suite_ids:dict = dict()
-
-    # pega o BOAccount
-    BOAccounts = dal_crm.BOAccounts(CRM)
-    for BOAccount in BOAccounts:
-        BOAccount_id = BOAccount['id']
-        id_conta_lm = BOAccount['id_conta_lm']
-
-        # pega as BUs do BO com o id_conta_lm
-        lm_bus = dal_lm.GetBUs(accountid=id_conta_lm)
-
-        # compara as BUs do BO com as do CRM (cria e/ou atualiza)
-        for budata in lm_bus if lm_bus else []:
-            account_data = mod_crm.Account.fromBO(budata).__dict__
-            if account_data['atividade_principal_c'] == 'Negocios':
-                respostas[bu_id] = "Rever atividade Principal"
-                suite_ids[bu_id] = None
-                continue
-
-            suite_id = budata.get('suite_id')
-            bu_id = budata.get('bu_id')
-            id_cliente = budata.get('id_cliente')
-            contrato = budata.get('contract_number')
-            contratoX = budata.get('contrato_expandido')
-
-            # pega o Contrato que beneficia essa BU
-            crm_contract = GetContract(CRM, numero=contrato)
-            if not crm_contract or len(crm_contract) == 0:
-                logger.critical(f"O Contrato {contrato} não está no CRM")
-                continue
-            else:
-                crm_contract = crm_contract[0]
-
-            respostas[bu_id] = ""
-            suite_ids[bu_id] = suite_id
-            
-            # está no CRM ?
-            crm_bu = GetAccount(CRM, buid=bu_id)
-            if not crm_bu:
-                # tentativa por endereço, dentro do mesmo id_conta_lm
-                _endereco = re.sub('[^a-zA-Z0-9]', '', mod_crm.Account._endereco(budata.get('street_type'), budata.get('street'), budata.get('house_number'), budata.get('additional_address')))
-                k, _k, _crm_bu = 0, 0, None
-                crm_bus = GetAccount(CRM, id_conta_lm=id_conta_lm)
-                for crm_bu in crm_bus if crm_bus else []:
-                    if _endereco == re.sub('[^a-zA-Z0-9]', '', account_data['billing_address_street']):
-                        k += 1
-                    if bu_id == account_data['bu_id_c']:
-                        k += 1
-                    if k > _k:
-                        _k = k
-                        _crm_bu = crm_bu
-            else:
-                _crm_bu = crm_bu[0]
-
-            # trata inativação (remoção) do CRM
-            if account_data['status_c'] == 'Inativo':
-                if _crm_bu:
-                    suite_ids[bu_id] = None
-                    # retira a marcação no BO
-                    dal_lm.PutSuiteID(bu_id, '')
-
-                    # verifica se é o único BU_ID desse Account
-                    if (list_bu_ids:=_crm_bu.get('list_bu_ids_c')):
-                        list_bu_ids = list_bu_ids.replace(f"{bu_id},",'') if list_bu_ids else ''
-                    if list_bu_ids:
-                        _crm_bu['list_bu_ids_c'] = list_bu_ids
-                        s, _ = dal_crm.Account_Update(CRM, _crm_bu)
-                        if s:
-                            respostas[bu_id] += f"Tentativa de atualizar Account do CRM frustrada, id:{_crm_bu['id']}"
-                        else:
-                            respostas[bu_id] += 'Removido do CRM, inativo.'
-                    else:
-                        removeu = dal_crm.Account_Delete(CRM, crm_id=_crm_bu['id'])
-                        if removeu:
-                            respostas[bu_id] += 'Removido CRM, inativo.'
-                        else:
-                            respostas[bu_id] += f"Tentativa de remover Account do CRM frustrada, id:{_crm_bu['id']}"
-                        continue
-
-            # achou ?
-            if not _crm_bu:
-                # Bu Nova
-                account_data['bu_id_c'] = bu_id
-                account_data['list_bu_id_c'] = f"{bu_id},"
-                account_data['id_cliente_c'] = None
-                account_data['id_conta_lm_c'] = id_conta_lm
-                s, _crm_bu = dal_crm.Account_Create(CRM, account_data)
-                if s:
-                    respostas[bu_id] = f"Não foi possivel criar a BU id_cliente/bu_id {id_cliente}/{bu_id}"
-                    suite_ids[bu_id] = None
-                    continue
-                else:
-                    respostas[bu_id] += 'Atualizado.'
-                    suite_ids[bu_id] = suite_id
-                    # atualiza a lista de bu_ids dessa BU
-                    if f"{bu_id}," not in crm_bus.get('list_bu_id_c'):
-                        account_data['list_bu_id_c'] = f"{crm_bus.get('list_bu_id_c')}{bu_id},"
-                    dal_lm.PutSuiteID(bu_id, _crm_bu['id']) # marca no BO
-
-            # faz as associações
-            # 1 - BOAccount
-            dal_crm.BOAccount_AssociaBU(CRM, crm_id=BOAccount_id, crm_account_ids=_crm_bu['id'])
-            # 2 - Contract
-            dal_crm.Contract_AssociaAccounts(CRM, crm_contract_id=crm_contract['id'], crm_account_id=_crm_bu['id'])
-
-    # sobrou account ? Remover do CRM !!
-    for _acc in crm_bus:
-        suite_id = _acc.get('id')
-        if suite_id:
-            # remove do CRM
-            removeu = dal_crm.Account_Delete(CRM, suite_id)
-            if removeu:
-                if _acc.get('bu_id_c'):
-                    bu_id = int(_acc.get('bu_id_c'))
-                    suite_ids[bu_id] = suite_id
-                    dal_lm.PutSuiteID(bu_id, '')
-                    # pode ser que não esteja no vetor de respostas
-                    try:
-                        respostas[bu_id] += 'Removido CRM, inativo.'
-                    except:
-                        respostas[bu_id] = 'Removido CRM, inativo.'
-        else:
-            logger.critical(f"Account: {suite_id} sem suite_id !")
-
-    return respostas, suite_ids
-
+    # pega a relação de BUs x Contratos Ativos do BO e atualiza no CRM e remove os Contratos não-ativos
+    dal_lm.Atualiza_BUsBeneficiadas()
+    
 
 def sync_CRM2BO_Account() -> tuple[str: dict]:
     msg_tec:str = ""
