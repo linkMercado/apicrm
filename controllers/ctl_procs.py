@@ -13,6 +13,30 @@ from dal import dal_crm
 
 WATSON_UserID = 'a2fc0fc9-cb48-39c3-2bb2-658b42a377d7'
 
+
+def check_date_format(data:str) -> str:
+    pattern = r'^\d{4}-\d{2}-\d{2}$'
+    if re.match(pattern, data):
+        return 'INT'
+    pattern = r'^\d{2}/\d{2}/\d{4}$'
+    if re.match(pattern, data):
+        return 'BRA'
+    return '??'
+
+def conv_date(data) -> date:
+    if data is None:
+        return None
+    if isinstance(data, date):
+        return data
+    if isinstance(data, datetime):
+        return data.date()
+    if check_date_format(data) == 'INT':
+        return datetime.strptime(data, '%Y-%m-%d').date()
+    if check_date_format(data) == 'BRA':
+        return datetime.strptime(data, '%d/%m/%Y').date()
+    return ''
+
+
 def GetBOAccount(CRM:SuiteCRM.SuiteCRM, id:str=None, id_conta_lm:str=None) -> dict:
     if id:
         filtro = { 'id': id}
@@ -242,7 +266,7 @@ def get_sync_contract(args:dict=dict()) -> list[dict]:
             id = v
         elif k in ['name', 'nome']:
             name = v
-        elif k in ['numero', 'reference_code', 'contrato']:
+        elif k in ['numero', 'reference_code', 'numero_contrato', 'contrato']:
             numero = v
     if id or name or numero:
         return GetContract(None, id=id, name=name, numero=numero)
@@ -854,30 +878,62 @@ def sync_task(CRM:SuiteCRM.SuiteCRM=None, task_data:dict=dict()) -> str:
     if not CRM:
         CRM = SuiteCRM.SuiteCRM(logger) 
 
-    if not ajusta_dict(task_data, 'name', 'assunto'):
-        return "Nome da tarefa [name] não informado"
+    # realiza os ajustes necessários (datas e nome)
+    for k, v in task_data.items():
+        if k in ["date_entered","start_date","end_date","date_due"]:
+            task_data[k] = conv_date(v)
+
+    task_id = task_data.get('id')
     ajusta_dict(task_data, 'descricao_c', 'descricao')
-    if not ajusta_dict(task_data, 'priority', 'prioridade'):
-        return "Prioridade [prioridade] não informado"
-    if not (lm_account_id:=ajusta_dict(task_data, 'id_conta_lm_c', 'id_conta_lm')):
-        return "id_conta_lm [id_conta_lm] não informado"
-    if not ajusta_dict(task_data, 'assigned_user_id', 'receptor_da_tarefa'):
-        return "Usuário receptor da tarefa [receptor_da_tarefa] não informado"
-    if not task_data.get('date_start'):
-        return "Data início da tarefa [date_start] não informado"
-    if not task_data.get('date_due'):
-        return "Data final da tarefa [date_due] não informado"
-    if not task_data.get('date_entered'):
-        task_data['date_entered'] = task_data['date_start']
+    ajusta_dict(task_data, 'name', 'assunto')
+    ajusta_dict(task_data, 'priority', 'prioridade')
+    lm_account_id = ajusta_dict(task_data, 'id_conta_lm_c', 'id_conta_lm')
     business_unit_id = ajusta_dict(task_data, 'business_unit_id', 'bu_id')
+    ajusta_dict(task_data, 'assigned_user_id', 'receptor_da_tarefa')
+
+    if not task_id:
+        # marca task como não iniciada
+        task_data['status'] = "Not Started"
+
+        # verifica se todos os parametros obrigatórios estão sendo informados
+        if not task_data.get('name'):
+            return "Nome da tarefa [name] não informado"
+        if not task_data.get('priority'):
+            return "Prioridade [prioridade] não informado"
+        if not task_data.get('id_conta_lm_c'):
+            return "id_conta_lm [id_conta_lm] não informado"
+        if not task_data.get('assigned_user_id'):
+            return "Usuário receptor da tarefa [receptor_da_tarefa] não informado"
+        if not task_data.get('date_start'):
+            return "Data início da tarefa [date_start] não informado"
+        if not task_data.get('date_due'):
+            return "Data final da tarefa [date_due] não informado"
+        if not task_data.get('parent_type'):
+            return "Tipo de Origem [parent_type] não informado"
+        if not task_data.get('parent_id'):
+            return "Referente a [parent_id] não informado"
+        # ajusta as datas de início e criação da tarefa
+        if not task_data.get('date_entered'):
+            task_data['date_entered'] = task_data['date_start']
+        if not task_data.get('date_start'):
+            task_data['date_start'] = task_data['date_entered']
+
     if not task_data.get('linkexterno_c'):
         if lm_account_id and business_unit_id:
-            task_data['linkexterno_c'] =  f"https://plataforma.linkmercado.com.br/private/area-de-clientes/conta/{lm_account_id}/empresas/{business_unit_id}/editar"
-    #ajusta_dict(task_data, 'parent_id', 'assunto')
-    #ajusta_dict(task_data, 'parent_type', 'descricao')
-    task_data['status'] = "Not Started",
+            task_data['linkexterno_c'] = f"https://plataforma.linkmercado.com.br/private/area-de-clientes/conta/{lm_account_id}/empresas/{business_unit_id}/editar"
 
-    msg, crm_task = dal_crm.Task_Create(CRM, task_data)
+    if task_id:
+        s, _ = dal_crm.Task_Update(CRM, task_data)
+        # atualizou ?
+        if s:
+            return s
+    else:
+        s, _ = dal_crm.Task_Create(CRM, task_data)
+        if s:
+            logger.critical(f"Tarefa: Não foi criada. Erro:{s}, Dados:{task_data}")
+            return f"Tarefa: Não foi criada. Erro:{s}, Dados:{task_data}"
+    
+    return "OK"
 
 
 def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
@@ -936,10 +992,6 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
     if bu_nova and not gerente_relacionamento_name:
         return "Gerente de Conta [gerente_conta] não informado"
 
-    # pega os ids do RC e do GC e os grupos de segurança
-    New_RC_id, New_GC_id, _ = descobreIDs_RC_GC_ER(CRM, RC_name=representante_comercial_name, GC_name=gerente_relacionamento_name, ER_name=None)
-    New_sec_grupo = pegaIDs_grupos_seguranca(CRM, RC_id=New_RC_id, GC_id=New_GC_id, ER_id=None)
-
     # Nome Fantasia ?
     if bu_nova and not account_data.get('name'):
         return "Nome Fantasia [name] não informado"
@@ -959,6 +1011,11 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
 
     if bu_nova and not id_conta_lm:
         return "BOAccount [id_contalm] não informado"
+
+    # pega os ids do RC e do GC e os grupos de segurança
+    New_RC_id, New_GC_id, _ = descobreIDs_RC_GC_ER(CRM, RC_name=representante_comercial_name, GC_name=gerente_relacionamento_name, ER_name=None)
+    New_sec_grupo = pegaIDs_grupos_seguranca(CRM, RC_id=New_RC_id, GC_id=New_GC_id, ER_id=None)
+    account_data['security_ids'] = New_sec_grupo
 
     # pega o BOAccounts com esse id_conta_lm
     BOAccount = GetBOAccount(CRM, id_conta_lm=id_conta_lm)
@@ -991,9 +1048,8 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
     if not crm_BU:
         # indica o BOAccount
         account_data['gcr_contabackoffice_accountsgcr_contabackoffice_ida'] = BOAccount['id'] 
-        # indica o RC
+        # indica o RC e GC
         account_data['assigned_user_id'] = RC_id
-        # indica o GC
         account_data['gerente_relacionamento_id'] = GC_id
         s, crm_BU = dal_crm.Account_Create(CRM, account_data)
         # criou ?
@@ -1006,10 +1062,12 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
 
         # acerta o link no BO
         dal_lm.PutSuiteID(crm_BU.get('bu_id_c'), crm_BU.get('id'))
-    else: # Atualiza a BU
+    else: # Atualiza a BU         
+        # remove grupos anteriores         
+        dal_crm.Account_RemoveGrupoSeguranca(CRM, crm_BU['id'], grupos=sec_grupo)
+        
         # indica qual a BU
         account_data['id'] = crm_BU['id']
-        account_data['security_ids'] = New_sec_grupo
         s, crm_BU = dal_crm.Account_Update(CRM, account_data)
         # atualizou ?
         if s:
@@ -1031,14 +1089,15 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
         # acerta o GC e RC das BUs desse BOAccount
         BUs = dal_crm.BOAccount_getAccounts(CRM, BOAccount['id'])
         for BU in BUs:
-            dal_crm.Account_RemoveGrupoSeguranca(CRM, BU['id'], grupos=sec_grupo)
-            dal_crm.Account_Update(CRM, { 
-                                        'id': BU['id'],
-                                        'gerente_relacionamento_id': New_GC_id,
-                                        'assigned_user_id': New_RC_id,
-                                        'security_ids': New_sec_grupo
-                                        }
-                                    )
+            if BU['id'] != crm_BU['id']:
+                dal_crm.Account_RemoveGrupoSeguranca(CRM, BU['id'], grupos=sec_grupo)
+                dal_crm.Account_Update(CRM, { 
+                                            'id': BU['id'],
+                                            'gerente_relacionamento_id': New_GC_id,
+                                            'assigned_user_id': New_RC_id,
+                                            'security_ids': New_sec_grupo
+                                            }
+                                        )
 
         # acerta o GC e RC dos Contratos desse BOAccount
         Contratos = dal_crm.BOAccount_getContracts(CRM, BOAccount['id'])
@@ -1047,12 +1106,9 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
             dal_crm.Contract_Update(CRM, { 
                                         'id': Contrato['id'],
                                         'gerente_relacionamento_id': New_GC_id,
-                                        'assigned_user_id': New_RC_id,
                                         'security_ids': New_sec_grupo
                                         }
                                     )
-
-                                
     else:
         # associa a BU a BOAccount
         dal_crm.BOAccount_AssociaBU(CRM, crm_id=BOAccount['id'], crm_account_ids=crm_BU['id'])
@@ -1249,39 +1305,18 @@ def sync_contact(CRM:SuiteCRM.SuiteCRM=None, contact_data:dict=dict()) -> str:
 
 
 def sync_contract(CRM:SuiteCRM.SuiteCRM=None, contract_data:dict=dict()) -> str:
-    def check_date_format(data:str) -> str:
-        pattern = r'^\d{4}-\d{2}-\d{2}$'
-        if re.match(pattern, data):
-            return 'INT'
-        pattern = r'^\d{2}/\d{2}/\d{4}$'
-        if re.match(pattern, data):
-            return 'BRA'
-        return '??'
-
-    def conv_date(data) -> date:
-        if data is None:
-            return None
-        if isinstance(data, date):
-            return data
-        if isinstance(data, datetime):
-            return data.date()
-        if check_date_format(data) == 'INT':
-            return datetime.strptime(data, '%Y-%m-%d').date()
-        if check_date_format(data) == 'BRA':
-            return datetime.strptime(data, '%d/%m/%Y').date()
-        return ''
-
     if CRM is None:
         CRM = SuiteCRM.SuiteCRM(logger)
 
-    
     # não utiliza a informação GC para nada
-    if "representante_comercial" in contract_data:
-        del contract_data["representante_comercial"]
+    if "gerente_relacionamento_id" in contract_data:
+        del contract_data["gerente_relacionamento_id"]
+    if "gerente_relacionamento_name" in contract_data:
+        del contract_data["gerente_relacionamento_name"]
 
     # realiza os ajustes necessários (datas e nome)
     for k, v in contract_data.items():
-        if k in ["date_entered","start_date","end_date","customer_signed_date","company_signed_date","renewal_reminder_date","data_cancelamento_c"]:
+        if k in ["date_entered","start_date","end_date","customer_signed_date","company_signed_date","renewal_reminder_date","data_cancelamento_c","data_cancelamento"]:
             contract_data[k] = conv_date(v)
         elif k in ["assigned_user_name", 'especialista_relacionamento_name']:
             contract_data[k] = v.upper()
@@ -1335,14 +1370,6 @@ def sync_contract(CRM:SuiteCRM.SuiteCRM=None, contract_data:dict=dict()) -> str:
             return f"BU Contratante: foram encontrados {len(ContaContratante) if ContaContratante else 0} registros no CRM com id_cliente={id_cliente} !"
         ContaContratante = ContaContratante[0]
         id_conta_lm = ContaContratante.get('id_conta_lm_c')
-
-    #id_conta_lm = ajusta_dict(contract_data, 'id_conta_lm', 'id_conta_lm_c')
-    #if contrato_novo and not id_conta_lm:
-    #    return "BOAccount [id_contalm] não informado"
-    #else:
-    #    # usar o id_conta_lm da ContaContratante
-    #    print("todo: usar o id_conta_lm da ContaContratante")
-
 
     # ajusta a data de encerramento do contrato
     if (data_cancelamento:=contract_data.get('data_cancelamento_c')) and not contract_data.get('end_date'):

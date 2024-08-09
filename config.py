@@ -12,7 +12,7 @@ DbConfig = {
         , "password": "!nt3rn3tf@st"
         , "autocommit": True
         , "database": "linkmercado"
-        , "pool_size": 2
-        , "max_pool_size": 8
+        , "pool_size": 5
+        , "max_pool_size": 10
         , "pool_name": "CRM-LMPool"
 }

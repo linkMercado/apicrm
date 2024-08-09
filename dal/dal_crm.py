@@ -296,6 +296,18 @@ def Task_Create(CRM:SuiteCRM.SuiteCRM, task_data:dict) -> tuple[str,dict]:
         return "Sem informação", None
 
 
+def Task_Update(CRM:SuiteCRM.SuiteCRM, task_data:dict) -> tuple[str,dict]:
+    if task_data:
+        s, d = CRM.PutData("tasks", parametros=task_data)
+        if s:
+            logger.critical(f"Tarefa não foi atualizada. erro:{s}, dados:{task_data}")
+        else:
+            logger.info(f"Tarefa foi atualizada. dados:{task_data}")
+        return s, d
+    else:
+        return "Sem informação", None
+
+
 def SecurityGroup_Get(CRM:SuiteCRM.SuiteCRM, name:str) -> tuple[str,dict]:
     if name:
         resp = CRM.GetData("security-groups", filtro={'name': name})
