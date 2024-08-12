@@ -13,7 +13,6 @@ from dal import dal_crm
 
 WATSON_UserID = 'a2fc0fc9-cb48-39c3-2bb2-658b42a377d7'
 
-
 def check_date_format(data:str) -> str:
     pattern = r'^\d{4}-\d{2}-\d{2}$'
     if re.match(pattern, data):
@@ -22,6 +21,7 @@ def check_date_format(data:str) -> str:
     if re.match(pattern, data):
         return 'BRA'
     return '??'
+
 
 def conv_date(data) -> date:
     if data is None:
@@ -37,7 +37,7 @@ def conv_date(data) -> date:
     return ''
 
 
-def GetBOAccount(CRM:SuiteCRM.SuiteCRM, id:str=None, id_conta_lm:str=None) -> dict:
+def GetBOAccount(CRM:SuiteCRM.SuiteCRM, id:str=None, id_conta_lm:str=None) -> list[dict]:
     if id:
         filtro = { 'id': id}
     elif id_conta_lm:
@@ -55,7 +55,41 @@ def GetBOAccount(CRM:SuiteCRM.SuiteCRM, id:str=None, id_conta_lm:str=None) -> di
             resposta.append(r)
         return resposta
     else:
-        return dict()
+        return list()
+
+
+def GetTask(CRM:SuiteCRM.SuiteCRM, id:str=None) -> list[dict]:
+    if id:
+        filtro = {'id': id}
+    if filtro:
+        if not CRM:
+            CRM = SuiteCRM.SuiteCRM(logger)
+        resp = dal_crm.Task_Get(CRM, filtro)
+        resposta = list()
+        for r in resp:
+            if r['id'] != id:
+                continue
+            resposta.append(r)
+        return resposta
+    else:
+        return list()
+
+
+def GetProject(CRM:SuiteCRM.SuiteCRM, id:str=None) -> list[dict]:
+    if id:
+        filtro = {'id': id}
+    if filtro:
+        if not CRM:
+            CRM = SuiteCRM.SuiteCRM(logger)
+        resp = dal_crm.Project_Get(CRM, filtro)
+        resposta = list()
+        for r in resp:
+            if r['id'] != id:
+                continue
+            resposta.append(r)
+        return resposta
+    else:
+        return list()
 
 
 def GetContact(CRM:SuiteCRM.SuiteCRM, id:str=None, fname:str=None, lname:str=None, email:str=None, document:str=None, phone_work:str=None, mobile_phone:str=None, whatsapp:str=None) -> list[dict]:
@@ -145,6 +179,7 @@ def GetContact(CRM:SuiteCRM.SuiteCRM, id:str=None, fname:str=None, lname:str=Non
         return resp
     else:
         return list()
+
 
 def get_sync_contact(args:dict=dict()) -> list[dict]:
     # verifica os parametros aceitos
@@ -874,6 +909,19 @@ def cria_BOconta(CRM:SuiteCRM.SuiteCRM, name:str, id_conta_lm:str, assigned_user
     else:
         return None, BOAccount
 
+
+def get_sync_task(args:dict=dict()) -> list[dict]:
+    # verifica os parametros aceitos
+    id = None
+    for k, v in args.items():
+        if k == 'id':
+            id = v
+    if id:
+        return GetTask(None, id=id)
+    else:
+        return list()
+
+
 def sync_task(CRM:SuiteCRM.SuiteCRM=None, task_data:dict=dict()) -> str:
     if not CRM:
         CRM = SuiteCRM.SuiteCRM(logger) 
@@ -887,9 +935,10 @@ def sync_task(CRM:SuiteCRM.SuiteCRM=None, task_data:dict=dict()) -> str:
     ajusta_dict(task_data, 'descricao_c', 'descricao')
     ajusta_dict(task_data, 'name', 'assunto')
     ajusta_dict(task_data, 'priority', 'prioridade')
-    lm_account_id = ajusta_dict(task_data, 'id_conta_lm_c', 'id_conta_lm')
-    business_unit_id = ajusta_dict(task_data, 'business_unit_id', 'bu_id')
-    ajusta_dict(task_data, 'assigned_user_id', 'receptor_da_tarefa')
+    ajusta_dict(task_data, 'assigned_user_name', 'receptor_da_tarefa')
+    ajusta_dict(task_data, 'linkexterno_c', 'linkexterno')
+    ajusta_dict(task_data, 'date_start', 'start_date')
+    ajusta_dict(task_data, 'date_due', 'end_date')
 
     if not task_id:
         # marca task como não iniciada
@@ -902,25 +951,19 @@ def sync_task(CRM:SuiteCRM.SuiteCRM=None, task_data:dict=dict()) -> str:
             return "Prioridade [prioridade] não informado"
         if not task_data.get('id_conta_lm_c'):
             return "id_conta_lm [id_conta_lm] não informado"
-        if not task_data.get('assigned_user_id'):
-            return "Usuário receptor da tarefa [receptor_da_tarefa] não informado"
+        if not task_data.get('assigned_user_name') and not task_data.get('assigned_user_id'):
+            return "Colaborador receptor da tarefa [receptor_da_tarefa] não informado"
         if not task_data.get('date_start'):
-            return "Data início da tarefa [date_start] não informado"
+            return "Data início da tarefa [start_date] não informado"
         if not task_data.get('date_due'):
-            return "Data final da tarefa [date_due] não informado"
+            return "Data final da tarefa [end_date] não informado"
         if not task_data.get('parent_type'):
             return "Tipo de Origem [parent_type] não informado"
         if not task_data.get('parent_id'):
             return "Referente a [parent_id] não informado"
         # ajusta as datas de início e criação da tarefa
         if not task_data.get('date_entered'):
-            task_data['date_entered'] = task_data['date_start']
-        if not task_data.get('date_start'):
-            task_data['date_start'] = task_data['date_entered']
-
-    if not task_data.get('linkexterno_c'):
-        if lm_account_id and business_unit_id:
-            task_data['linkexterno_c'] = f"https://plataforma.linkmercado.com.br/private/area-de-clientes/conta/{lm_account_id}/empresas/{business_unit_id}/editar"
+            task_data['date_entered'] = datetime.today()
 
     if task_id:
         s, _ = dal_crm.Task_Update(CRM, task_data)
@@ -1072,7 +1115,6 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
         # atualizou ?
         if s:
             return s
-        
 
     # precisa atualizar o RC ou o GC ?
     if New_sec_grupo != sec_grupo:
@@ -1297,7 +1339,7 @@ def sync_contact(CRM:SuiteCRM.SuiteCRM=None, contact_data:dict=dict()) -> str:
         #    _ = dal_crm.Contact_AssociaGruposSeguranca(CRM, crm_contact_id=k['id'], crm_sec_grup_ids=grupos[:-1] )
         
         # se só existe uma BU nessa BOAccount, o contato também é do BOAccount
-        BUs = dal_crm.BOAccount_getAccounts(CRM, bo_account_id=BOAccount['id'])
+        BUs = dal_crm.BOAccount_getAccounts(CRM, crm_boaccount_id=BOAccount['id'])
         if len(BUs) == 1:
             dal_crm.BOAccount_AssociaContacts(CRM, BOAccount['id'], k['id'])
 
@@ -1339,11 +1381,17 @@ def sync_contract(CRM:SuiteCRM.SuiteCRM=None, contract_data:dict=dict()) -> str:
     else:
         return "Número do contrato [numero_contrato] não informado"
 
+    if contrato_novo and not contract_data.get('status_contrato_c'):
+        return "Status do contrato [status_contrato] não informado."
+
     if not contrato_novo:
         crm_contrato = crm_contrato[0]
         ER_id = crm_contrato['users_aos_contracts_1users_ida']
+        contrato_ativo = crm_contrato.get('status_contrato_c').upper() == 'ATIVO'
     else:
         ER_id = None
+        contrato_ativo = contract_data.get('status_contrato_c').upper() == 'ATIVO'
+
 
     if contrato_novo and not contract_data.get('name'):
         return "Contrato sem nome [name]"
@@ -1419,8 +1467,82 @@ def sync_contract(CRM:SuiteCRM.SuiteCRM=None, contract_data:dict=dict()) -> str:
         if s:
             return f"Contrato não foi criado. Erro:{s}, Dados:{contract_data}"
 
-    # coloca o grupo do especialita na BU Contratante
-    dal_crm.Account_AssociaGruposSeguranca(CRM, crm_account_id=ContaContratante['id'], crm_sec_grup_ids=New_grupos_sec)
+    if contrato_ativo:
+        # coloca o grupo do especialita na BU Contratante
+        dal_crm.Account_AssociaGruposSeguranca(CRM, crm_account_id=ContaContratante['id'], crm_sec_grup_ids=New_grupos_sec)
+    else:
+        # retirar o especialista da BU Contratante, se não existir nenhum contrato ativo com esse especialista
+        kontratos = dal_crm.Account_getContracts(CRM, ContaContratante['id'], fulldata=True)
+        for k in kontratos:
+            if k.get('status_contrato_c').upper() == 'ATIVO':
+                if k.get('users_aos_contracts_1users_ida') == ER_id:
+                    return "OK"
+        # se chegou até aqui é porque nenhum contrato ativo usa esse especialista
+        dal_crm.Account_RemoveGrupoSeguranca(CRM, crm_account_id=ContaContratante['id'], grupos=pegaIDs_grupos_seguranca(CRM, ER_id=ER_id))    
+    return "OK"
+
+
+def get_sync_project(args:dict=dict()) -> list[dict]:
+    # verifica os parametros aceitos
+    id = None
+    for k, v in args.items():
+        if k == 'id':
+            id = v
+    if id:
+        return GetProject(None, id=id)
+    else:
+        return list()
+
+
+def sync_project(CRM:SuiteCRM.SuiteCRM=None, project_data:dict=dict()) -> str:
+    # ainda falta o Projeto Base !
+    # 'am_projecttemplates_project_1_name': {'name': '', 'id': ''}, 
+    # 'am_projecttemplates_project_1am_projecttemplates_ida': '', 
+    if not CRM:
+        CRM = SuiteCRM.SuiteCRM(logger) 
+
+    project_id = project_data.get('id')
+    ajusta_dict(project_data, 'estimated_start_date', 'start_date')
+    ajusta_dict(project_data, 'estimated_end_date', 'end_date')
+    ajusta_dict(project_data, 'descricao_c', 'descricao')
+    ajusta_dict(project_data, 'name', 'assunto')
+    ajusta_dict(project_data, 'priority', 'prioridade')
+    ajusta_dict(project_data, 'assigned_user_name', 'gerente_conta')
+
+    # realiza os ajustes necessários (datas e nome)
+    for k, v in project_data.items():
+        if k in ["estimated_start_date", "estimated_end_date"]:
+            project_data[k] = conv_date(v)
+
+    if not project_id:
+        # marca task como não iniciada
+        if not project_data.get('override_business_hours'):
+            project_data['override_business_hours'] = 'true'
+        # verifica se todos os parametros obrigatórios estão sendo informados
+        if not project_data.get('name'):
+            return "Nome do Projeto [name] não informado"
+        if not project_data.get('priority'):
+            return "Prioridade do Projeto [prioridade] não informado"
+        if not project_data.get('status'):
+            return "Status do Projeto [status] não informado"
+        if not project_data.get('estimated_start_date'):
+            return "Data do início do Projeto [start_date] não informado"
+        if not project_data.get('estimated_end_date'):
+            return "Data do fim do Projeto [end_date] não informado"
+        if not project_data.get('assigned_user_name'):
+            return "Gerente de Conta [gerente_conta] não informado"
+
+    if project_id:
+        s, _ = dal_crm.Project_Update(CRM, project_data)
+        # atualizou ?
+        if s:
+            return s
+    else:
+        s, _ = dal_crm.Project_Create(CRM, project_data)
+        if s:
+            logger.critical(f"Projeto: Não foi criada. Erro:{s}, Dados:{project_data}")
+            return f"Projeto: Não foi criada. Erro:{s}, Dados:{project_data}"
+    
     return "OK"
 
 
@@ -1633,7 +1755,7 @@ def associa_gruposseguranca_aos_contratos():
         grupo1 = pegaIDs_grupos_seguranca(CRM, RC_id=RC_id, GC_id=GC_id, ER_id=None)
         
         # pega os contratos dessas BOAccounts
-        contratos = dal_crm.BOAccount_getContracts(CRM, BOAccount['id'])
+        contratos = dal_crm.BOAccount_getContracts(CRM, BOAccount['id'], fulldata=True)
         for contrato in contratos if contratos else []:
             print('.', end='')
             RC_id = contrato.get('assigned_user_id')
@@ -1665,7 +1787,7 @@ def remove_GC_de_BOAccounts_sem_contrato_ativo():
     for BOAccount in BOAccounts:
         print('>', end='')
         # pega os contratos dessas BOAccounts
-        contratos = dal_crm.BOAccount_getContracts(CRM, BOAccount['id'])
+        contratos = dal_crm.BOAccount_getContracts(CRM, BOAccount['id'], fulldata=True)
         if not tem_contrato_ativo(contratos):
             print('.', end='')
             if (GC_id:=BOAccount['users_gcr_contabackoffice_1users_ida']):

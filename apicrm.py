@@ -116,6 +116,10 @@ def app_sync_module(module:str):
                 resp = ctl_procs.get_sync_contract(args=args)
             elif module in ['contact', 'contato']:
                 resp = ctl_procs.get_sync_contact(args=args)
+            elif module in ['task', 'tarefa']:
+                resp = ctl_procs.get_sync_task(args=args)
+            elif module in ['project', 'projeto']:
+                resp = ctl_procs.get_sync_project(args=args)
             else:
                 msg = "Módulo desconhecido"   
             if not msg:
@@ -133,7 +137,14 @@ def app_sync_module(module:str):
             elif module in ['contract', 'contrato']:
                 msg = ctl_procs.sync_contract(contract_data=args)
             elif module in ['contact', 'contato']:
-                msg = ctl_procs.sync_contact(contract_data=args)
+                msg = ctl_procs.sync_contact(contact_data=args)
+            elif module in ['task', 'tarefa']:
+                msg = ctl_procs.sync_task(task_data=args)
+            elif module in ['project', 'projeto']:
+                msg = ctl_procs.sync_project(project_data=args)
+            else:
+                resp_status = 404
+                msg = "Módulo desconhecido"   
 
     LOGGER.debug(f"sync_{module}, s:{resp_status} m:{msg}")
     return Response(msg, mimetype=mimetype, status=resp_status) 

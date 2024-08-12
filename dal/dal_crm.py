@@ -78,10 +78,10 @@ def Account_Update(CRM:SuiteCRM.SuiteCRM, account_data:dict) -> tuple[str,dict]:
         return "Sem informação", None
 
 
-def Account_RemoveGrupoSeguranca(CRM:SuiteCRM.SuiteCRM, account_id:str, grupos:str) -> None:
+def Account_RemoveGrupoSeguranca(CRM:SuiteCRM.SuiteCRM, crm_account_id:str, grupos:str) -> None:
     if grupos:
         for sec_g in grupos.split(','):
-            _ = CRM.Desassocia(base_module="accounts", base_record_id=account_id, relate_module="security-groups", relate_record_id=sec_g)
+            _ = CRM.Desassocia(base_module="accounts", base_record_id=crm_account_id, relate_module="security-groups", relate_record_id=sec_g)
 
 
 def Account_Delete(CRM:SuiteCRM.SuiteCRM, crm_id:str) -> bool:
@@ -98,13 +98,30 @@ def Account_Delete(CRM:SuiteCRM.SuiteCRM, crm_id:str) -> bool:
         return False
 
 
-def Account_getContacts(CRM:SuiteCRM.SuiteCRM, account_id:str) -> list[dict]:
-    contacts = CRM.GetSubPanelData(parentModule="accounts", parentId=account_id, module="contacts", subpanel="contacts")
-    if contacts and len(contacts) > 0:
-        return contacts
+def Account_getContacts(CRM:SuiteCRM.SuiteCRM, crm_account_id:str, fulldata:bool=False) -> list[dict]:
+    contacts = CRM.GetSubPanelData(parentModule="accounts", parentId=crm_account_id, module="contacts", subpanel="contacts")
+    if fulldata:
+        kontacts = list()
+        for contact in contacts if contacts else list():
+            k = Contact_Get(CRM, {'id': contact('id')})
+            if k: 
+                kontacts.extend(k)
+        return kontacts
     else:
-        return None
+        return contacts if contacts else list()
 
+
+def Account_getContracts(CRM:SuiteCRM.SuiteCRM, crm_account_id:str, fulldata:bool=False) -> list[dict]:
+    contracts = CRM.GetSubPanelData(parentModule="accounts", parentId=crm_account_id, module="contracts", subpanel="account_aos_contracts")
+    if fulldata:
+        contratos = list()
+        for contract in contracts if contracts else list():
+            k = Contract_Get(CRM, filtro={'id':contract['id']})
+            if k:
+                contratos.extend(k)
+        return contratos
+    return contracts if contracts else list()
+    
 
 def User_Get(CRM:SuiteCRM.SuiteCRM, id:str=None, username:str=None, email:str=None) -> list[dict]:
     if username:
@@ -229,10 +246,10 @@ def Contract_AssociaGruposSeguranca(CRM:SuiteCRM.SuiteCRM, crm_contract_id:str, 
     return CRM.AssociateData("contracts", base_record_id=crm_contract_id, relate_module="security-groups", relate_record_ids=crm_sec_grup_ids)
     
 
-def Contract_RemoveGrupoSeguranca(CRM:SuiteCRM.SuiteCRM, contract_id:str, grupos:str) -> None:
+def Contract_RemoveGrupoSeguranca(CRM:SuiteCRM.SuiteCRM, crm_contract_id:str, grupos:str) -> None:
     if grupos:
         for sec_g in grupos.split(','):
-            _ = CRM.Desassocia(base_module="contracts", base_record_id=contract_id, relate_module="security-groups", relate_record_id=sec_g)
+            _ = CRM.Desassocia(base_module="contracts", base_record_id=crm_contract_id, relate_module="security-groups", relate_record_id=sec_g)
 
 
 def Ticket_Create(CRM:SuiteCRM.SuiteCRM, ticket_data:dict) -> tuple[str,dict]:
@@ -267,26 +284,43 @@ def BOAccount_Update(CRM:SuiteCRM.SuiteCRM, contaBO_data:dict) -> tuple[str,dict
         return "Sem informação", None
     
 
-def BOAccount_RemoveGrupoSeguranca(CRM:SuiteCRM.SuiteCRM, bo_account_id:str, grupos:str) -> None:
+def BOAccount_RemoveGrupoSeguranca(CRM:SuiteCRM.SuiteCRM, crm_boaccount_id:str, grupos:str) -> None:
     if grupos:
         for sec_g in grupos.split(','):
-            _ = CRM.Desassocia(base_module="GCR_ContaBackoffice", base_record_id=bo_account_id, relate_module="security-groups", relate_record_id=sec_g)
+            _ = CRM.Desassocia(base_module="GCR_ContaBackoffice", base_record_id=crm_boaccount_id, relate_module="security-groups", relate_record_id=sec_g)
 
 
-def BOAccount_getAccounts(CRM:SuiteCRM.SuiteCRM, bo_account_id:str) -> list[dict]:
-    accounts = CRM.GetSubPanelData(parentModule="GCR_ContaBackoffice", parentId=bo_account_id, module="accounts", subpanel="gcr_contabackoffice_accounts")
-    if accounts and len(accounts) > 0:
-        return accounts
+def BOAccount_getAccounts(CRM:SuiteCRM.SuiteCRM, crm_boaccount_id:str, fulldata:bool=False) -> list[dict]:
+    accounts = CRM.GetSubPanelData(parentModule="GCR_ContaBackoffice", parentId=crm_boaccount_id, module="accounts", subpanel="gcr_contabackoffice_accounts")
+    if fulldata:
+        akounts = list()
+        for account in accounts if accounts else list():
+            k = Account_Get(CRM, account['id'])
+            if k:
+                akounts.extend(k)
+        return akounts
+    else:
+        return accounts if accounts else list()
+
+
+def BOAccount_getContracts(CRM:SuiteCRM.SuiteCRM, crm_boaccount_id:str, fulldata:bool=False) -> list:
+    contracts = CRM.GetSubPanelData(parentModule="GCR_ContaBackoffice", parentId=crm_boaccount_id, module="contracts", subpanel="gcr_contabackoffice_aos_contracts")
+    if fulldata:
+        kontracts = list()
+        for contract in contracts if contracts else list():
+            k = Contract_Get(CRM, contract['id'])
+            if k:
+                kontracts.extend(k)
+        return kontracts
+    else:
+        return contracts if contracts else list()
+
+
+def Task_Get(CRM:SuiteCRM.SuiteCRM, filtro:dict) -> list[dict]:
+    if filtro:
+        return CRM.GetData("tasks", filtro=filtro)
     else:
         return list()
-
-
-def BOAccount_getContracts(CRM:SuiteCRM.SuiteCRM, bo_account_id:str) -> list:
-    contracts = CRM.GetSubPanelData(parentModule="GCR_ContaBackoffice", parentId=bo_account_id, module="contracts", subpanel="gcr_contabackoffice_aos_contracts")
-    if contracts and len(contracts) > 0:
-        return contracts
-    else:
-        return []
 
 
 def Task_Create(CRM:SuiteCRM.SuiteCRM, task_data:dict) -> tuple[str,dict]:
@@ -303,6 +337,33 @@ def Task_Update(CRM:SuiteCRM.SuiteCRM, task_data:dict) -> tuple[str,dict]:
             logger.critical(f"Tarefa não foi atualizada. erro:{s}, dados:{task_data}")
         else:
             logger.info(f"Tarefa foi atualizada. dados:{task_data}")
+        return s, d
+    else:
+        return "Sem informação", None
+
+
+def Project_Get(CRM:SuiteCRM.SuiteCRM, filtro:dict) -> list[dict]:
+    if filtro:
+        return CRM.GetData("project", filtro=filtro)
+    else:
+        return list()
+
+
+
+def Project_Create(CRM:SuiteCRM.SuiteCRM, project_data:dict) -> tuple[str,dict]:
+    if project_data:
+        return CRM.PostData("project", parametros=project_data)
+    else:
+        return "Sem informação", None
+
+
+def Project_Update(CRM:SuiteCRM.SuiteCRM, project_data:dict) -> tuple[str,dict]:
+    if project_data:
+        s, d = CRM.PutData("project", parametros=project_data)
+        if s:
+            logger.critical(f"Projeto não foi atualizado. erro:{s}, dados:{project_data}")
+        else:
+            logger.info(f"Projeto foi atualizada. dados:{project_data}")
         return s, d
     else:
         return "Sem informação", None
