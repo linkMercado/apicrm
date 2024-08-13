@@ -1360,7 +1360,7 @@ def sync_contract(CRM:SuiteCRM.SuiteCRM=None, contract_data:dict=dict()) -> str:
     for k, v in contract_data.items():
         if k in ["date_entered","start_date","end_date","customer_signed_date","company_signed_date","renewal_reminder_date","data_cancelamento_c","data_cancelamento"]:
             contract_data[k] = conv_date(v)
-        elif k in ["assigned_user_name", 'especialista_relacionamento_name']:
+        elif k in ["assigned_user_name", 'especialista_relacionamento_name', 'representante_comercial', 'especialista']:
             contract_data[k] = v.upper()
 
     # ajusta os campos para o CRM
