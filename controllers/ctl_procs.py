@@ -58,16 +58,41 @@ def GetBOAccount(CRM:SuiteCRM.SuiteCRM, id:str=None, id_conta_lm:str=None) -> li
         return list()
 
 
-def GetTask(CRM:SuiteCRM.SuiteCRM, id:str=None) -> list[dict]:
+def GetTask(CRM:SuiteCRM.SuiteCRM, id:str=None, parent_id:str=None) -> list[dict]:
     if id:
         filtro = {'id': id}
+    elif parent_id:
+        filtro = {'parent_id': parent_id}
     if filtro:
         if not CRM:
             CRM = SuiteCRM.SuiteCRM(logger)
         resp = dal_crm.Task_Get(CRM, filtro)
         resposta = list()
         for r in resp:
-            if r['id'] != id:
+            if id and r['id'] != id:
+                continue
+            if parent_id and r['parent_id'] != parent_id:
+                continue
+            resposta.append(r)
+        return resposta
+    else:
+        return list()
+
+
+def GetTicket(CRM:SuiteCRM.SuiteCRM, id:str=None, account_id:str=None) -> list[dict]:
+    if id:
+        filtro = {'id': id}
+    elif account_id:
+        filtro = {'account_id': account_id}
+    if filtro:
+        if not CRM:
+            CRM = SuiteCRM.SuiteCRM(logger)
+        resp = dal_crm.Ticket_Get(CRM, filtro)
+        resposta = list()
+        for r in resp:
+            if id and r['id'] != id:
+                continue
+            if account_id and r['account_id'] != account_id:
                 continue
             resposta.append(r)
         return resposta
@@ -244,27 +269,6 @@ def GetAccount(CRM:SuiteCRM.SuiteCRM, id:str=None, id_conta_lm:str=None, buid:st
     return resposta
 
 
-def get_sync_bu(args:dict=dict()) -> list[dict]:
-    # verifica os parametros aceitos
-    id = None
-    id_conta_lm = None
-    buid = None
-    id_cliente = None
-    for k, v in args.items():
-        if k == 'id':
-            id = v
-        elif k in ['id_conta_lm', 'id_conta_lm_c']:
-            id_conta_lm = v
-        elif k in ['buid', 'bu_id', 'bu_id_c', 'business_unit_id']:
-            buid = v
-        elif k in ['id_cliente','id_cliente_c']:
-            id_cliente = v
-    if id or id_conta_lm or buid or id_cliente:
-        return GetAccount(None, id=id, id_conta_lm=id_conta_lm, buid=buid, id_cliente=id_cliente)
-    else:
-        return []
-
-
 def GetContract(CRM:SuiteCRM.SuiteCRM, id:str=None, name:str=None, numero:str=None) -> list[dict]:
     filtro = dict()
     if id:
@@ -289,24 +293,6 @@ def GetContract(CRM:SuiteCRM.SuiteCRM, id:str=None, name:str=None, numero:str=No
         return resposta    
     else:
         return list()
-
-
-def get_sync_contract(args:dict=dict()) -> list[dict]:
-    # verifica os parametros aceitos
-    id = None
-    name = None
-    numero = None
-    for k, v in args.items():
-        if k == 'id':
-            id = v
-        elif k in ['name', 'nome']:
-            name = v
-        elif k in ['numero', 'reference_code', 'numero_contrato', 'contrato']:
-            numero = v
-    if id or name or numero:
-        return GetContract(None, id=id, name=name, numero=numero)
-    else:
-        return []
 
 
 def sync_BO2CRM_Account(account_id:str, userid:str=None, crm_user_id:str=None, gerente_relacionamento:str=None) -> tuple[dict, dict]:
@@ -979,6 +965,27 @@ def sync_task(CRM:SuiteCRM.SuiteCRM=None, task_data:dict=dict()) -> str:
     return "OK"
 
 
+def get_sync_bu(args:dict=dict()) -> list[dict]:
+    # verifica os parametros aceitos
+    id = None
+    id_conta_lm = None
+    buid = None
+    id_cliente = None
+    for k, v in args.items():
+        if k == 'id':
+            id = v
+        elif k in ['id_conta_lm', 'id_conta_lm_c']:
+            id_conta_lm = v
+        elif k in ['buid', 'bu_id', 'bu_id_c', 'business_unit_id']:
+            buid = v
+        elif k in ['id_cliente','id_cliente_c']:
+            id_cliente = v
+    if id or id_conta_lm or buid or id_cliente:
+        return GetAccount(None, id=id, id_conta_lm=id_conta_lm, buid=buid, id_cliente=id_cliente)
+    else:
+        return []
+
+
 def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
     if not CRM:
         CRM = SuiteCRM.SuiteCRM(logger) 
@@ -1118,7 +1125,7 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
 
     # precisa atualizar o RC ou o GC ?
     if New_sec_grupo != sec_grupo:
-            # remove grupos de segurança antigos
+        # remove grupos de segurança antigos
         dal_crm.BOAccount_RemoveGrupoSeguranca(CRM, BOAccount['id'], grupos=sec_grupo)
 
         # atualiza RC e GC do BOAccount           
@@ -1140,6 +1147,36 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
                                             'security_ids': New_sec_grupo
                                             }
                                         )
+            # trocou o GC ?
+            if New_GC_id != GC_id:
+                GC_sec_grupo_id = pegaIDs_grupos_seguranca(CRM, GC_id=GC_id)
+                New_GC_sec_grupo_id = pegaIDs_grupos_seguranca(CRM, GC_id=New_GC_id)
+
+                # tratando contatos
+                for contato in dal_crm.Account_getContacts(CRM, crm_account_id=BU['id']):
+                    dal_crm.Contact_RemoveGrupoSeguranca(CRM, contato['id'], grupos=GC_sec_grupo_id)
+                    dal_crm.Contact_AssociaGruposSeguranca(CRM, contato['id'], crm_sec_grup_ids=New_GC_sec_grupo_id)
+
+                # tratando tarefas
+                for tarefa in GetTask(CRM, parent_id=BU['id']):
+                    if tarefa.get('assigned_user_id') == GC_id and tarefa.get('status') != "Completed":
+                        # troca o assigned to para as tarefas em andamento para o GC anterior
+                        dal_crm.Task_Update(CRM, {'id': tarefa['id'], 'assigned_user_id': New_GC_id, 'security_ids': New_GC_sec_grupo_id})
+                    else:
+                        # coloca a tarefa visível para o newGC e remove a visibilidade do GC anterior
+                        dal_crm.Task_AssociaGruposSeguranca(CRM, tarefa['id'], crm_sec_grup_ids=New_GC_sec_grupo_id)
+                        dal_crm.Task_RemoveGrupoSeguranca(CRM, tarefa['id'], grupos=GC_sec_grupo_id)
+
+                # tratando ticket
+                for ticket in GetTicket(CRM, account_id=BU['id']):
+                    if ticket.get('assigned_user_id') == GC_id and ticket.get('state') != "Closed":
+                        # troca o assigned to para os ticket em andamento para o GC anterior
+                        dal_crm.Ticket_Update(CRM, {'id': ticket['id'], 'assigned_user_id': New_GC_id, 'security_ids': New_GC_sec_grupo_id})
+                    else:
+                        # coloca a tarefa visível para o newGC e remove a visibilidade do GC anterior
+                        dal_crm.Ticket_AssociaGruposSeguranca(CRM, ticket['id'], crm_sec_grup_ids=New_GC_sec_grupo_id)
+                        dal_crm.Ticket_RemoveGrupoSeguranca(CRM, ticket['id'], grupos=GC_sec_grupo_id)
+
 
         # acerta o GC e RC dos Contratos desse BOAccount
         Contratos = dal_crm.BOAccount_getContracts(CRM, BOAccount['id'])
@@ -1346,6 +1383,26 @@ def sync_contact(CRM:SuiteCRM.SuiteCRM=None, contact_data:dict=dict()) -> str:
     return "OK"
 
 
+
+def get_sync_contract(args:dict=dict()) -> list[dict]:
+    # verifica os parametros aceitos
+    id = None
+    name = None
+    numero = None
+    for k, v in args.items():
+        if k == 'id':
+            id = v
+        elif k in ['name', 'nome']:
+            name = v
+        elif k in ['numero', 'reference_code', 'numero_contrato', 'contrato']:
+            numero = v
+    if id or name or numero:
+        return GetContract(None, id=id, name=name, numero=numero)
+    else:
+        return []
+
+
+
 def sync_contract(CRM:SuiteCRM.SuiteCRM=None, contract_data:dict=dict()) -> str:
     if CRM is None:
         CRM = SuiteCRM.SuiteCRM(logger)
@@ -1391,7 +1448,6 @@ def sync_contract(CRM:SuiteCRM.SuiteCRM=None, contract_data:dict=dict()) -> str:
     else:
         ER_id = None
         contrato_ativo = contract_data.get('status_contrato_c').upper() == 'ATIVO'
-
 
     if contrato_novo and not contract_data.get('name'):
         return "Contrato sem nome [name]"
@@ -1471,14 +1527,21 @@ def sync_contract(CRM:SuiteCRM.SuiteCRM=None, contract_data:dict=dict()) -> str:
         # coloca o grupo do especialita na BU Contratante
         dal_crm.Account_AssociaGruposSeguranca(CRM, crm_account_id=ContaContratante['id'], crm_sec_grup_ids=New_grupos_sec)
     else:
+        ER_sec_id = pegaIDs_grupos_seguranca(CRM, ER_id=ER_id)
+
+        # remove a visualização desse contrato do especialista
+        dal_crm.Contract_RemoveGrupoSeguranca(CRM, crm_contrato['id'], grupos=ER_sec_id)
+
         # retirar o especialista da BU Contratante, se não existir nenhum contrato ativo com esse especialista
         kontratos = dal_crm.Account_getContracts(CRM, ContaContratante['id'], fulldata=True)
         for k in kontratos:
             if k.get('status_contrato_c').upper() == 'ATIVO':
                 if k.get('users_aos_contracts_1users_ida') == ER_id:
                     return "OK"
+
         # se chegou até aqui é porque nenhum contrato ativo usa esse especialista
-        dal_crm.Account_RemoveGrupoSeguranca(CRM, crm_account_id=ContaContratante['id'], grupos=pegaIDs_grupos_seguranca(CRM, ER_id=ER_id))    
+        dal_crm.Account_RemoveGrupoSeguranca(CRM, crm_account_id=ContaContratante['id'], grupos=ER_sec_id)
+
     return "OK"
 
 
