@@ -112,6 +112,8 @@ def app_sync_module(module:str):
             mimetype = 'application/json'
             if module in ['account', 'bu']:
                 resp = ctl_procs.get_sync_bu(args=args)
+            elif module in ['boconta', 'boaccount']:
+                resp = ctl_procs.get_sync_boconta(args=args)
             elif module in ['contract', 'contrato']:
                 resp = ctl_procs.get_sync_contract(args=args)
             elif module in ['contact', 'contato']:
@@ -134,6 +136,8 @@ def app_sync_module(module:str):
             mimetype = 'application/text'
             if module in ['account', 'bu']:
                 msg = ctl_procs.sync_bu(account_data=args)
+            elif module in ['boconta', 'boaccount']:
+                resp = ctl_procs.sync_boconta(boaccount_data=args)
             elif module in ['contract', 'contrato']:
                 msg = ctl_procs.sync_contract(contract_data=args)
             elif module in ['contact', 'contato']:
