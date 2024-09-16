@@ -1,7 +1,10 @@
 # encoding: utf-8
 # -*- coding: utf-8 -*-
 
+import re
+
 API_GEN_UserID = "e53b04f5-d41d-e195-e970-65e720c0cda5"
+
 
 
 class Account(object):
@@ -188,6 +191,24 @@ class Contact(object):
         else:
             cls.tipocontato_c = ['^Usuariobackoffice^']
         return cls
+
+    @classmethod
+    def fromLead(cls, lead_data:dict):    
+        cls = Contact()
+        cls.first_name = lead_data['first_name'] if lead_data.get('first_name') else 'sem primeiro nome'
+        cls.last_name = lead_data.get('last_name')
+        cls.email1 = lead_data.get('email1')
+        cls.cpf_c = re.sub('[^0-9]', '',lead_data.get('cpf_c',''))
+        cls.phone_work = lead_data.get('phone_work')
+        cls.phone_fax = lead_data.get('phone_fax')
+        cls.phone_home = lead_data.get('phone_home')
+        cls.phone_mobile = lead_data.get('phone_mobile')
+        cls.phone_other = lead_data.get('phone_other')
+        cls.salutation = lead_data.get('salutation')
+        cls.contatoprincipal_c = 1
+        cls.tipocontato_c = ['Autorizador']
+        return cls
+
 
 
 class BOConta(object):

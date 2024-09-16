@@ -182,7 +182,7 @@ def GetSuiteID(buid:str) -> str:
     return None
 
 
-def PutSuiteID(buid:str, suiteid:str) -> bool:
+def PutSuiteID(buid:str, suiteid:str=None, leadid:str=None) -> bool:
     """"Atualiza o SuiteId e troca a company para LM
 
     Keyword arguments:
@@ -191,12 +191,14 @@ def PutSuiteID(buid:str, suiteid:str) -> bool:
     Return: bool indicando se conseguiu ou não fazer a atualização
     """
 
-    if buid:
+    if buid and (suiteid or leadid):
+        set1 = f"bu.suite_id = '{suiteid}', ac.company_id = CASE WHEN '{suiteid}' = '' THEN ac.company_id ELSE 3 END" if suiteid else ""
+        set2 = f"bu.lead_id = '{leadid}'" if leadid else ""
         cmd = f"""UPDATE linkmercado.core_business_units bu
                   JOIN linkmercado.core_accounts ac
                     ON ac.id = bu.account_id
-                  SET bu.suite_id = '{suiteid}', ac.company_id = CASE WHEN '{suiteid}' = '' THEN ac.company_id ELSE 3 END
-                  WHERE bu.id = '{buid}' and bu.account_id > 1"""
+                  SET {set1}{', ' if set1 else ''}{set2} 
+                  WHERE bu.id = '{buid}' and bu.account_id > 1"""        
         resp = mysql_pool.execute(cmd, cursor_args={"buffered": True, "dictionary": True}, commit=True, lastInserted=True)
         return True if resp and resp.get('rowcount') else False
     return False

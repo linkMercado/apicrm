@@ -160,6 +160,25 @@ def User_Get(CRM:SuiteCRM.SuiteCRM, id:str=None, username:str=None, email:str=No
         return None
 
 
+def Lead_Get(CRM:SuiteCRM.SuiteCRM, filtro:dict) -> list[dict]:
+    if filtro:
+        return CRM.GetData("leads", filtro=filtro)
+    else:
+        return []
+
+
+def Lead_Update(CRM:SuiteCRM.SuiteCRM, lead_data:dict) -> tuple[str,dict]:
+    if lead_data:
+        s, d = CRM.PutData("leads", parametros=lead_data)
+        if s:
+            logger.critical(f"Lead não foi atualizado. erro:{s}, dados:{lead_data}")
+        else:
+            logger.info(f"Lead foi atualizado. dados:{lead_data}")
+        return s, d
+    else:
+        return "Sem informação", None
+
+
 def Contact_Get(CRM:SuiteCRM.SuiteCRM, filtro:dict) -> list[dict]:
     if filtro:
         return CRM.GetData("contacts", filtro=filtro)
@@ -373,7 +392,7 @@ def BOAccount_getAccounts(CRM:SuiteCRM.SuiteCRM, crm_boaccount_id:str, fulldata:
     if fulldata:
         akounts = list()
         for account in accounts if accounts else list():
-            k = Account_Get(CRM, account['id'])
+            k = Account_Get(CRM, filtro={'id':account['id']})
             if k:
                 akounts.extend(k)
         return akounts
@@ -386,7 +405,7 @@ def BOAccount_getContracts(CRM:SuiteCRM.SuiteCRM, crm_boaccount_id:str, fulldata
     if fulldata:
         kontracts = list()
         for contract in contracts if contracts else list():
-            k = Contract_Get(CRM, contract['id'])
+            k = Contract_Get(CRM, filtro={'id':contract['id']})
             if k:
                 kontracts.extend(k)
         return kontracts
@@ -400,6 +419,10 @@ def BOAccount_AssociaContracts(CRM:SuiteCRM.SuiteCRM, crm_id:str, crm_contract_i
 
 def BOAccount_AssociaBU(CRM:SuiteCRM.SuiteCRM, crm_id:str, crm_account_ids:str) -> bool:
     return CRM.AssociateData(base_module="GCR_ContaBackoffice", base_record_id=crm_id, relate_module="accounts", relate_record_ids=crm_account_ids)
+
+
+def BOAccount_DesassociaBU(CRM:SuiteCRM.SuiteCRM, crm_id:str, crm_account_id:str) -> bool:
+    return CRM.Desassocia(base_module="GCR_ContaBackoffice", base_record_id=crm_id, relate_module="accounts", relate_record_ids=crm_account_id)
 
 
 def BOAccount_AssociaContacts(CRM:SuiteCRM.SuiteCRM, crm_id:str, crm_contact_ids:str) -> bool:

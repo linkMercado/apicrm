@@ -153,6 +153,13 @@ def app_sync_module(module:str):
     LOGGER.debug(f"sync_{module}, s:{resp_status} m:{msg}")
     return Response(msg, mimetype=mimetype, status=resp_status) 
 
+@app.route('/crm/bus_candidatas', methods=['GET'])
+@cross_origin(origin='*',headers=['Content-Type','Authorization'])
+@logar
+def app_busca_bus_candidatas():
+    resp = ctl_procs.bus_candidatas(lead_data=request.args.to_dict())
+    return Response(json.dumps(resp, default=DefaultConv), mimetype='application/json', status=200) 
+
 
 @app.route('/crm/sync/xaccount', methods=[ 'GET', 'POST', 'PUT'])
 @cross_origin(origin='*',headers=['Content-Type','Authorization'])
