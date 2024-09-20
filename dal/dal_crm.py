@@ -2,9 +2,15 @@
 # -*- coding: utf-8 -*-
 #
 
-import re
+
 from apicrm import LOGGER as logger
 from apicrm import SUITECRM as SuiteCRM
+from apicrm import CRMPOOL as mysql_pool
+
+
+def getPoolInfo():
+    return mysql_pool.getPoolInfo()
+
 
 def DeleteObject(CRM:SuiteCRM.SuiteCRM, module:str, entity_data:dict) -> tuple[bool, dict]:
     critica = CRM.critica_parametros(module, 'DELETE', entity_data)
@@ -43,6 +49,10 @@ def GetObject(CRM:SuiteCRM.SuiteCRM, module:str, filtro:dict=dict()) -> tuple[bo
     return True, { 'data': CRM.GetData(module, filtro=filtro) }
 
 
+def Colaboradores(CRM) -> list[dict]:
+    return CRM.GetData("users", filtro={})
+    
+
 def Accounts(CRM) -> list[dict]:
     return CRM.GetData("accounts", filtro={})
     
@@ -63,7 +73,7 @@ def Account_Create(CRM:SuiteCRM.SuiteCRM, account_data:dict) -> tuple[str,dict]:
             logger.info(f"Account foi criado. dados:{account_data}")
         return s, d
     else:
-        return 'sem dados para cadastrar', None
+        return 'sem dados para cadastrar', dict()
 
 
 def Account_Update(CRM:SuiteCRM.SuiteCRM, account_data:dict) -> tuple[str,dict]:
@@ -75,7 +85,7 @@ def Account_Update(CRM:SuiteCRM.SuiteCRM, account_data:dict) -> tuple[str,dict]:
             logger.info(f"Account foi atualizado. dados:{account_data}")
         return s, d
     else:
-        return "Sem informação", None
+        return "Sem informação", dict()
 
 
 def Account_Delete(CRM:SuiteCRM.SuiteCRM, crm_id:str) -> bool:
@@ -92,16 +102,16 @@ def Account_Delete(CRM:SuiteCRM.SuiteCRM, crm_id:str) -> bool:
         return False
 
 
-def Account_AssociaContatos(CRM:SuiteCRM.SuiteCRM, crm_account_id:str, crm_contact_ids:str) -> bool:
-    return CRM.AssociateData("accounts", base_record_id=crm_account_id, relate_module="contacts", relate_record_ids=crm_contact_ids)
+def Account_AssociaContatos(CRM:SuiteCRM.SuiteCRM, crm_account_id:str, crm_contact_ids:str) -> None:
+    CRM.AssociateData("accounts", base_record_id=crm_account_id, relate_module="contacts", relate_record_ids=crm_contact_ids)
 
 
-def Account_AssociaContracts(CRM:SuiteCRM.SuiteCRM, crm_account_id:str, crm_contract_ids:str) -> bool:
-    return CRM.AssociateData("accounts", base_record_id=crm_account_id, relate_module="contracts", relate_record_ids=crm_contract_ids)
+def Account_AssociaContracts(CRM:SuiteCRM.SuiteCRM, crm_account_id:str, crm_contract_ids:str) -> None:
+    CRM.AssociateData("accounts", base_record_id=crm_account_id, relate_module="contracts", relate_record_ids=crm_contract_ids)
 
 
-def Account_AssociaGruposSeguranca(CRM:SuiteCRM.SuiteCRM, crm_account_id:str, crm_sec_grup_ids:str) -> bool:
-    return CRM.AssociateData("accounts", base_record_id=crm_account_id, relate_module="security-groups", relate_record_ids=crm_sec_grup_ids)
+def Account_AssociaGruposSeguranca(CRM:SuiteCRM.SuiteCRM, crm_account_id:str, crm_sec_grup_ids:str) -> None:
+    CRM.AssociateData("accounts", base_record_id=crm_account_id, relate_module="security-groups", relate_record_ids=crm_sec_grup_ids)
 
 
 def Account_GetGruposSeguranca(CRM:SuiteCRM.SuiteCRM, crm_contract_id:str) -> list[dict]:
@@ -110,12 +120,10 @@ def Account_GetGruposSeguranca(CRM:SuiteCRM.SuiteCRM, crm_contract_id:str) -> li
 
 
 def Account_RemoveGrupoSeguranca(CRM:SuiteCRM.SuiteCRM, crm_account_id:str, grupos:str) -> None:
-    if grupos:
-        for sec_g in grupos.split(','):
-            _ = CRM.Desassocia(base_module="accounts", base_record_id=crm_account_id, relate_module="security-groups", relate_record_id=sec_g)
+    CRM.Desassocia(base_module="accounts", base_record_id=crm_account_id, relate_module="security-groups", relate_record_ids=grupos)
 
 
-def Account_getContacts(CRM:SuiteCRM.SuiteCRM, crm_account_id:str, fulldata:bool=False) -> list[dict]:
+def Account_GetContacts(CRM:SuiteCRM.SuiteCRM, crm_account_id:str, fulldata:bool=False) -> list[dict]:
     contacts = CRM.GetSubPanelData(parentModule="accounts", parentId=crm_account_id, module="contacts", subpanel="contacts")
     if fulldata:
         kontacts = list()
@@ -128,7 +136,7 @@ def Account_getContacts(CRM:SuiteCRM.SuiteCRM, crm_account_id:str, fulldata:bool
         return contacts if contacts else list()
 
 
-def Account_getContracts(CRM:SuiteCRM.SuiteCRM, crm_account_id:str, fulldata:bool=False) -> list[dict]:
+def Account_GetContracts(CRM:SuiteCRM.SuiteCRM, crm_account_id:str, fulldata:bool=False) -> list[dict]:
     contracts = CRM.GetSubPanelData(parentModule="accounts", parentId=crm_account_id, module="contracts", subpanel="account_aos_contracts")
     if fulldata:
         contratos = list()
@@ -157,7 +165,25 @@ def User_Get(CRM:SuiteCRM.SuiteCRM, id:str=None, username:str=None, email:str=No
     if len(usuarios) > 0:
         return usuarios
     else:
-        return None
+        return list()
+
+
+def User_getHierarquia(CRM:SuiteCRM.SuiteCRM, id:str) -> list:
+    if id:
+        return CRM.get_colaborador_hierarquia(id)
+    else:
+        return list()
+    
+
+def User_get_SecurityGroupHierarchy(CRM:SuiteCRM.SuiteCRM, id:str) -> str:
+    if id:
+        return CRM.get_securityGroupHierarchy(id)
+    else:
+        return ""
+
+
+def Leads(CRM) -> list[dict]:
+    return CRM.GetData("leads", filtro={})
 
 
 def Lead_Get(CRM:SuiteCRM.SuiteCRM, filtro:dict) -> list[dict]:
@@ -177,6 +203,23 @@ def Lead_Update(CRM:SuiteCRM.SuiteCRM, lead_data:dict) -> tuple[str,dict]:
         return s, d
     else:
         return "Sem informação", None
+
+
+def Lead_AssociaGruposSeguranca(CRM:SuiteCRM.SuiteCRM, crm_lead_id:str, crm_sec_grup_ids:str) -> bool:
+    CRM.AssociateData("leads", base_record_id=crm_lead_id, relate_module="security-groups", relate_record_ids=crm_sec_grup_ids)
+
+
+def Lead_RemoveGrupoSeguranca(CRM:SuiteCRM.SuiteCRM, crm_lead_id:str, grupos:str) -> None:
+    CRM.Desassocia(base_module="leads", base_record_id=crm_lead_id, relate_module="security-groups", relate_record_ids=grupos)
+
+
+def Lead_GetGruposSeguranca(CRM:SuiteCRM.SuiteCRM, crm_lead_id:str) -> list[dict]:
+    grupos_sec = CRM.GetSubPanelData(parentModule="leads", parentId=crm_lead_id, module="security-groups", subpanel="securitygroups")
+    return grupos_sec if grupos_sec else list()
+
+
+def Contacts(CRM) -> list[dict]:
+    return CRM.GetData("contacts", filtro={})
 
 
 def Contact_Get(CRM:SuiteCRM.SuiteCRM, filtro:dict) -> list[dict]:
@@ -222,23 +265,36 @@ def Contact_Delete(CRM:SuiteCRM.SuiteCRM, crm_id:str) -> bool:
         return False
 
 
-def Contact_AssociaAccounts(CRM:SuiteCRM.SuiteCRM, crm_contact_id:str, crm_account_id:str) -> bool:
-    return CRM.AssociateData("contacts", base_record_id=crm_contact_id, relate_module="accounts", relate_record_ids=crm_account_id)
+def Contact_GetAccounts(CRM:SuiteCRM.SuiteCRM, crm_contact_id:str, fulldata:bool=False) -> list[dict]:
+    accounts = CRM.GetSubPanelData(parentModule="contacts", parentId=crm_contact_id, module="contacts", subpanel="accounts")
+    if fulldata:
+        akounts = list()
+        for account in accounts if accounts else list():
+            k = Account_Get(CRM, filtro={'id':account['id']})
+            if k:
+                akounts.extend(k)
+        return akounts
+    else:
+        return accounts if accounts else list()
+
+
+def Contact_AssociaAccounts(CRM:SuiteCRM.SuiteCRM, crm_contact_id:str, crm_account_id:str) -> None:
+    CRM.AssociateData("contacts", base_record_id=crm_contact_id, relate_module="accounts", relate_record_ids=crm_account_id)
 
 
 def Contact_AssociaGruposSeguranca(CRM:SuiteCRM.SuiteCRM, crm_contact_id:str, crm_sec_grup_ids:str) -> bool:
-    return CRM.AssociateData("contacts", base_record_id=crm_contact_id, relate_module="security-groups", relate_record_ids=crm_sec_grup_ids)
+    CRM.AssociateData("contacts", base_record_id=crm_contact_id, relate_module="security-groups", relate_record_ids=crm_sec_grup_ids)
 
 
 def Contact_RemoveGrupoSeguranca(CRM:SuiteCRM.SuiteCRM, crm_contact_id:str, grupos:str) -> None:
-    if grupos:
-        for sec_g in grupos.split(','):
-            _ = CRM.Desassocia(base_module="contacts", base_record_id=crm_contact_id, relate_module="security-groups", relate_record_id=sec_g)
+    CRM.Desassocia(base_module="contacts", base_record_id=crm_contact_id, relate_module="security-groups", relate_record_ids=grupos)
 
 
 def Contact_GetGruposSeguranca(CRM:SuiteCRM.SuiteCRM, crm_contact_id:str) -> list[dict]:
     grupos_sec = CRM.GetSubPanelData(parentModule="contacts", parentId=crm_contact_id, module="security-groups", subpanel="securitygroups")
     return grupos_sec if grupos_sec else list()
+
+
 def Contract_Get(CRM:SuiteCRM.SuiteCRM, filtro:dict) -> list[dict]:
     if filtro:       
         return CRM.GetData("AOS_Contracts", filtro=filtro)
@@ -287,8 +343,8 @@ def Contract_Delete(CRM:SuiteCRM.SuiteCRM, crm_id:str=None, numero:str=None) -> 
     return False
 
 
-def Contract_AssociaAccounts(CRM:SuiteCRM.SuiteCRM, crm_contract_id:str, crm_account_id:str) -> bool:
-    return CRM.AssociateData("contracts", base_record_id=crm_contract_id, relate_module="accounts", relate_record_ids=crm_account_id)
+def Contract_AssociaAccounts(CRM:SuiteCRM.SuiteCRM, crm_contract_id:str, crm_account_id:str) -> None:
+    CRM.AssociateData("contracts", base_record_id=crm_contract_id, relate_module="accounts", relate_record_ids=crm_account_id)
 
 
 def Contract_GetGruposSeguranca(CRM:SuiteCRM.SuiteCRM, crm_contract_id:str) -> list[dict]:
@@ -296,14 +352,16 @@ def Contract_GetGruposSeguranca(CRM:SuiteCRM.SuiteCRM, crm_contract_id:str) -> l
     return grupos_sec if grupos_sec else list()
 
 
-def Contract_AssociaGruposSeguranca(CRM:SuiteCRM.SuiteCRM, crm_contract_id:str, crm_sec_grup_ids:str) -> bool:
-    return CRM.AssociateData("contracts", base_record_id=crm_contract_id, relate_module="security-groups", relate_record_ids=crm_sec_grup_ids)
+def Contract_AssociaGruposSeguranca(CRM:SuiteCRM.SuiteCRM, crm_contract_id:str, crm_sec_grup_ids:str) -> None:
+    CRM.AssociateData("contracts", base_record_id=crm_contract_id, relate_module="security-groups", relate_record_ids=crm_sec_grup_ids)
     
 
 def Contract_RemoveGrupoSeguranca(CRM:SuiteCRM.SuiteCRM, crm_contract_id:str, grupos:str) -> None:
-    if grupos:
-        for sec_g in grupos.split(','):
-            _ = CRM.Desassocia(base_module="contracts", base_record_id=crm_contract_id, relate_module="security-groups", relate_record_id=sec_g)
+    CRM.Desassocia(base_module="contracts", base_record_id=crm_contract_id, relate_module="security-groups", relate_record_ids=grupos)
+
+
+def Tickets(CRM:SuiteCRM.SuiteCRM) -> list[dict]:
+    return CRM.GetData("tickets")
 
 
 def Ticket_Create(CRM:SuiteCRM.SuiteCRM, ticket_data:dict) -> tuple[str,dict]:
@@ -332,14 +390,12 @@ def Ticket_Update(CRM:SuiteCRM.SuiteCRM, ticket_data:dict) -> tuple[str,dict]:
         return "Sem informação", None
 
 
-def Ticket_AssociaGruposSeguranca(CRM:SuiteCRM.SuiteCRM, crm_ticket_id:str, crm_sec_grup_ids:str) -> bool:
-    return CRM.AssociateData("cases", base_record_id=crm_ticket_id, relate_module="security-groups", relate_record_ids=crm_sec_grup_ids)
+def Ticket_AssociaGruposSeguranca(CRM:SuiteCRM.SuiteCRM, crm_ticket_id:str, crm_sec_grup_ids:str) -> None:
+    CRM.AssociateData("cases", base_record_id=crm_ticket_id, relate_module="security-groups", relate_record_ids=crm_sec_grup_ids)
 
 
 def Ticket_RemoveGrupoSeguranca(CRM:SuiteCRM.SuiteCRM, crm_ticket_id:str, grupos:str) -> None:
-    if grupos:
-        for sec_g in grupos.split(','):
-            _ = CRM.Desassocia(base_module="cases", base_record_id=crm_ticket_id, relate_module="security-groups", relate_record_id=sec_g)
+    CRM.Desassocia(base_module="cases", base_record_id=crm_ticket_id, relate_module="security-groups", relate_record_ids=grupos)
 
 
 def Ticket_GetGruposSeguranca(CRM:SuiteCRM.SuiteCRM, crm_ticket_id:str) -> list[dict]:
@@ -372,14 +428,12 @@ def BOAccount_Update(CRM:SuiteCRM.SuiteCRM, contaBO_data:dict) -> tuple[str,dict
         return "Sem informação", None
     
 
-def BOAccount_AssociaGruposSeguranca(CRM:SuiteCRM.SuiteCRM, crm_boaccount_id:str, crm_sec_grup_ids:str) -> bool:
-    return CRM.AssociateData("GCR_ContaBackoffice", base_record_id=crm_boaccount_id, relate_module="security-groups", relate_record_ids=crm_sec_grup_ids)
+def BOAccount_AssociaGruposSeguranca(CRM:SuiteCRM.SuiteCRM, crm_boaccount_id:str, crm_sec_grup_ids:str) -> None:
+    CRM.AssociateData("GCR_ContaBackoffice", base_record_id=crm_boaccount_id, relate_module="security-groups", relate_record_ids=crm_sec_grup_ids)
 
 
 def BOAccount_RemoveGrupoSeguranca(CRM:SuiteCRM.SuiteCRM, crm_boaccount_id:str, grupos:str) -> None:
-    if grupos:
-        for sec_g in grupos.split(','):
-            _ = CRM.Desassocia(base_module="GCR_ContaBackoffice", base_record_id=crm_boaccount_id, relate_module="security-groups", relate_record_id=sec_g)
+    CRM.Desassocia(base_module="GCR_ContaBackoffice", base_record_id=crm_boaccount_id, relate_module="security-groups", relate_record_ids=grupos)
 
 
 def BOAccount_GetGruposSeguranca(CRM:SuiteCRM.SuiteCRM, crm_boaccount_id:str) -> list[dict]:
@@ -387,7 +441,7 @@ def BOAccount_GetGruposSeguranca(CRM:SuiteCRM.SuiteCRM, crm_boaccount_id:str) ->
     return grupos_sec if grupos_sec else list()
 
 
-def BOAccount_getAccounts(CRM:SuiteCRM.SuiteCRM, crm_boaccount_id:str, fulldata:bool=False) -> list[dict]:
+def BOAccount_GetAccounts(CRM:SuiteCRM.SuiteCRM, crm_boaccount_id:str, fulldata:bool=False) -> list[dict]:
     accounts = CRM.GetSubPanelData(parentModule="GCR_ContaBackoffice", parentId=crm_boaccount_id, module="accounts", subpanel="gcr_contabackoffice_accounts")
     if fulldata:
         akounts = list()
@@ -400,7 +454,7 @@ def BOAccount_getAccounts(CRM:SuiteCRM.SuiteCRM, crm_boaccount_id:str, fulldata:
         return accounts if accounts else list()
 
 
-def BOAccount_getContracts(CRM:SuiteCRM.SuiteCRM, crm_boaccount_id:str, fulldata:bool=False) -> list:
+def BOAccount_GetContracts(CRM:SuiteCRM.SuiteCRM, crm_boaccount_id:str, fulldata:bool=False) -> list:
     contracts = CRM.GetSubPanelData(parentModule="GCR_ContaBackoffice", parentId=crm_boaccount_id, module="contracts", subpanel="gcr_contabackoffice_aos_contracts")
     if fulldata:
         kontracts = list()
@@ -413,21 +467,28 @@ def BOAccount_getContracts(CRM:SuiteCRM.SuiteCRM, crm_boaccount_id:str, fulldata
         return contracts if contracts else list()
 
 
-def BOAccount_AssociaContracts(CRM:SuiteCRM.SuiteCRM, crm_id:str, crm_contract_ids:str) -> bool:
-    return CRM.AssociateData(base_module="GCR_ContaBackoffice", base_record_id=crm_id, relate_module="contracts", relate_record_ids=crm_contract_ids)
+def BOAccount_AssociaContracts(CRM:SuiteCRM.SuiteCRM, crm_id:str, crm_contract_ids:str) -> None:
+    CRM.AssociateData(base_module="GCR_ContaBackoffice", base_record_id=crm_id, relate_module="contracts", relate_record_ids=crm_contract_ids)
 
 
-def BOAccount_AssociaBU(CRM:SuiteCRM.SuiteCRM, crm_id:str, crm_account_ids:str) -> bool:
-    return CRM.AssociateData(base_module="GCR_ContaBackoffice", base_record_id=crm_id, relate_module="accounts", relate_record_ids=crm_account_ids)
+def BOAccount_DesassociaContracts(CRM:SuiteCRM.SuiteCRM, crm_id:str, crm_contract_ids:str) -> None:
+    CRM.Desassocia(base_module="GCR_ContaBackoffice", base_record_id=crm_id, relate_module="contracts", relate_record_ids=crm_contract_ids)
 
 
-def BOAccount_DesassociaBU(CRM:SuiteCRM.SuiteCRM, crm_id:str, crm_account_id:str) -> bool:
-    return CRM.Desassocia(base_module="GCR_ContaBackoffice", base_record_id=crm_id, relate_module="accounts", relate_record_ids=crm_account_id)
+def BOAccount_AssociaBU(CRM:SuiteCRM.SuiteCRM, crm_id:str, crm_account_ids:str) -> None:
+    CRM.AssociateData(base_module="GCR_ContaBackoffice", base_record_id=crm_id, relate_module="accounts", relate_record_ids=crm_account_ids)
 
 
-def BOAccount_AssociaContacts(CRM:SuiteCRM.SuiteCRM, crm_id:str, crm_contact_ids:str) -> bool:
-    return CRM.AssociateData(base_module="GCR_ContaBackoffice", base_record_id=crm_id, relate_module="contacts", relate_record_ids=crm_contact_ids)
+def BOAccount_DesassociaBU(CRM:SuiteCRM.SuiteCRM, crm_id:str, grupos:str) -> None:
+    CRM.Desassocia(base_module="GCR_ContaBackoffice", base_record_id=crm_id, relate_module="accounts", relate_record_ids=grupos)
 
+
+def BOAccount_AssociaContacts(CRM:SuiteCRM.SuiteCRM, crm_id:str, crm_contact_ids:str) -> None:
+    CRM.AssociateData(base_module="GCR_ContaBackoffice", base_record_id=crm_id, relate_module="contacts", relate_record_ids=crm_contact_ids)
+
+
+def Tasks(CRM:SuiteCRM.SuiteCRM) -> list[dict]:
+    return CRM.GetData("tasks")
 
 
 def Task_Get(CRM:SuiteCRM.SuiteCRM, filtro:dict) -> list[dict]:
@@ -456,14 +517,12 @@ def Task_Update(CRM:SuiteCRM.SuiteCRM, task_data:dict) -> tuple[str,dict]:
         return "Sem informação", None
 
 
-def Task_AssociaGruposSeguranca(CRM:SuiteCRM.SuiteCRM, crm_task_id:str, crm_sec_grup_ids:str) -> bool:
-    return CRM.AssociateData("tasks", base_record_id=crm_task_id, relate_module="security-groups", relate_record_ids=crm_sec_grup_ids)
+def Task_AssociaGruposSeguranca(CRM:SuiteCRM.SuiteCRM, crm_task_id:str, crm_sec_grup_ids:str) -> None:
+    CRM.AssociateData("tasks", base_record_id=crm_task_id, relate_module="security-groups", relate_record_ids=crm_sec_grup_ids)
 
 
 def Task_RemoveGrupoSeguranca(CRM:SuiteCRM.SuiteCRM, crm_task_id:str, grupos:str) -> None:
-    if grupos:
-        for sec_g in grupos.split(','):
-            _ = CRM.Desassocia(base_module="tasks", base_record_id=crm_task_id, relate_module="security-groups", relate_record_id=sec_g)
+    CRM.Desassocia(base_module="tasks", base_record_id=crm_task_id, relate_module="security-groups", relate_record_ids=grupos)
 
 
 def Task_GetGruposSeguranca(CRM:SuiteCRM.SuiteCRM, crm_task_id:str) -> list[dict]:
@@ -476,7 +535,6 @@ def Project_Get(CRM:SuiteCRM.SuiteCRM, filtro:dict) -> list[dict]:
         return CRM.GetData("project", filtro=filtro)
     else:
         return list()
-
 
 
 def Project_Create(CRM:SuiteCRM.SuiteCRM, project_data:dict) -> tuple[str,dict]:
@@ -509,3 +567,19 @@ def SecurityGroup_Get(CRM:SuiteCRM.SuiteCRM, name:str) -> tuple[str,dict]:
         return None, resposta
     else:
         return "Sem informação", None
+
+
+def Atividade_GetID(cod:str=None, atv:str=None) -> str:
+    if cod:
+        cmd = f"select id from gcr_titulos where cod_titulo_lm={cod}"
+    elif atv:
+        _atv = atv.replace("'","''")
+        cmd = f"select id from gcr_titulos where name='{_atv}'"
+    else:
+        return None
+    resp = mysql_pool.execute(cmd, cursor_args={"buffered": True, "dictionary": True}, commit=False)
+    if resp and len(resp) > 0:
+        return resp[0]['id']
+    else:
+        return None
+    

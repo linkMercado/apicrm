@@ -1,4 +1,4 @@
-/mnt/packages/dist/lm_packages-1.6.5-py3-none-any.whl
+/mnt/packages/dist/lm_packages-1.6.6-py3-none-any.whl
 Flask
 flask-cors
 requests

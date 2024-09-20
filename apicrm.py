@@ -19,6 +19,7 @@ from flask_cors import CORS, cross_origin
 LOGGER = logging.setup_custom_logger(**config.LogConfig)
 MAILBOX = MailBox.MailBoxLM(LOGGER)
 MYSQLPOOL = MySQLPool.MySQLDBPool(LOGGER, **config.DbConfig)
+CRMPOOL = MySQLPool.MySQLDBPool(LOGGER, **config.CRMConfig)
 APPCONTROL = AppControl.AppControl(LOGGER, config.APPNAME, port=8904)
 SUITECRM = SuiteCRM
 
@@ -275,7 +276,7 @@ def app_notification():
     return Response(json.dumps(resp, default=DefaultConv), mimetype='application/json', status=resp_status) 
 
 
-@app.route('/crm/<module>', methods=['GET']) # ['GET', 'POST', 'PUT', 'DELETE'])
+@app.route('/crm/<module>', methods=['GET', 'PUT']) # ['GET', 'POST', 'PUT', 'DELETE'])
 @logar
 def app_crm(module):
     if request.method == 'GET':
