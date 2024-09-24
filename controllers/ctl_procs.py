@@ -2,6 +2,8 @@ import re
 import csv
 import string
 
+import requests
+
 from datetime import date, datetime
 from apicrm import LOGGER as logger
 from apicrm import SUITECRM as SuiteCRM 
@@ -1711,21 +1713,20 @@ def get_sync_project(args:dict=dict()) -> list[dict]:
         return list()
 
 
-def bus_candidatas(CRM:SuiteCRM.SuiteCRM=None, lead_data:dict=dict()) -> tuple[str, list]:
+def bus_candidatas(CRM:SuiteCRM.SuiteCRM=None, lead_id:str=None) -> tuple[str, list]:
     if not CRM:
         CRM = SuiteCRM.SuiteCRM(logger) 
 
-    lead_id = lead_data.get('id')
     if not lead_id:
         return {"msg":"Código do lead [id] não informado", "candidatos":list() }
     lead = dal_crm.Lead_Get(CRM, {'id': lead_id})
-    if not lead or len(lead) != 1:
-        return {"msg": f"Foram encontratos {len(lead) if lead else 0} com lead id ={id} no CRM", "candidatos":list() }
+    if len(lead) != 1:
+        return {"msg": f"Foram encontratos {len(lead)} com lead id ={id} no CRM", "candidatos":list() }
     lead = lead[0]
-    doc = lead.get('documento_empresa')
-    RC = lead['assigned_user_name']['user_name']
-    phone = lead.get('telefone_empresa')
-    doc = "06218857000169"
+
+    doc = lead.get('documento_c')
+    RC_name = lead['assigned_user_name']['user_name']
+    phone = lead.get('phone_work')
 
     # busca candidatos no BO 
     st, candidatos = dal_bo.busca_candidatos(doc, phone)
@@ -1734,14 +1735,48 @@ def bus_candidatas(CRM:SuiteCRM.SuiteCRM=None, lead_data:dict=dict()) -> tuple[s
     for c in candidatos:
         bu_id = c.get('id')
         bu = dal_crm.Account_Get(CRM, {'bu_id_c': bu_id})
-        if not bu or len(bu) != 1:
-            print(f"Foram encontratos {len(bu) if bu else 0} BUs com business_unit_id={bu_id} no CRM")
+        if len(bu) != 1:
+            print(f"Foram encontratos {len(bu)} BUs com business_unit_id={bu_id} no CRM")
             continue
         bu = bu[0]
         c['crmid'] = bu['id']
         representante_comercial = bu['assigned_user_name']['user_name']
-        c['status'] = 'Livre' if representante_comercial in [RC, SuiteCRM.ACC_GEN_UserID] else 'BU está atribuída a outro RC' 
+        c['status'] = 'Livre' if representante_comercial == RC_name or bu['assigned_user_id'] == SuiteCRM.ACC_GEN_UserID else 'BU está atribuída a outro RC' 
     return candidatos
+    
+def lead_bu_cria(CRM:SuiteCRM.SuiteCRM=None, lead_id:str=None):
+    if not CRM:
+        CRM = SuiteCRM.SuiteCRM(logger) 
+    lead = dal_crm.Lead_Get(CRM, {'id': lead_id})
+    if len(lead) != 1:
+        return {"msg": f"Foram encontratos {len(lead)} com lead id={id} no CRM", "candidatos":list() }
+    budata = mod_crm.convLead2BU(lead[0])
+    if budata:
+        headers = {
+            "Content-Type": "application/json",
+            "accept": "application/json",
+        }    
+        resp = requests.post("http://internal.linkmercado.com.br/data/importar/empresa", json=budata, headers=headers)
+    else:
+        resp = { 'status': "ERRO", 'msg':"Complete as informações no Lead para criar a BU" }
+    return resp
+
+
+def lead_bu_associa(CRM:SuiteCRM.SuiteCRM=None, lead_id:str=None, bu_id:str=None):
+    if not CRM:
+        CRM = SuiteCRM.SuiteCRM(logger) 
+    lead = dal_crm.Lead_Get(CRM, {'id': lead_id})
+    if len(lead) != 1:
+        return {"msg": f"Foram encontratos {len(lead)} Leads com id={id} no CRM", "status":"ERRO" }
+    lead = lead[0]
+
+    bu = dal_crm.Account_Get(CRM, {'id': bu_id})
+    if len(bu) != 1:
+        return {"msg": f"Foram encontratos {len(bu)} BUs com id={id} no CRM", "status":"ERRO" }
+    bu = bu[0]
+
+    dal_lm.PutSuiteID(bu.get("bu_id_c"), bu_id, lead['id'])
+    return {"msg": "", "status":"OK" }
     
 
 def sync_project(CRM:SuiteCRM.SuiteCRM=None, project_data:dict=dict()) -> str:

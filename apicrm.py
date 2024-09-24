@@ -154,11 +154,29 @@ def app_sync_module(module:str):
     LOGGER.debug(f"sync_{module}, s:{resp_status} m:{msg}")
     return Response(msg, mimetype=mimetype, status=resp_status) 
 
-@app.route('/crm/bus_candidatas', methods=['GET'])
+@app.route('/crm/lead/<leadid>/bus_candidatas', methods=['GET'])
 @cross_origin(origin='*',headers=['Content-Type','Authorization'])
 @logar
-def app_busca_bus_candidatas():
-    resp = ctl_procs.bus_candidatas(lead_data=request.args.to_dict())
+def app_lead_busca_bus_candidatas(leadid):
+    resp = ctl_procs.bus_candidatas(lead_id=leadid)
+    return Response(json.dumps(resp, default=DefaultConv), mimetype='application/json', status=200) 
+
+@app.route('/crm/lead/<leadid>/associa_bu', methods=['POST'])
+@cross_origin(origin='*',headers=['Content-Type','Authorization'])
+@logar
+def app_lead_cria_e_associa_bu(leadid):
+    resp = ctl_procs.lead_bu_cria(lead_id=leadid)
+    return Response(json.dumps(resp, default=DefaultConv), mimetype='application/json', status=200) 
+
+
+@app.route('/crm/lead/<leadid>/associa_bu/<buid>', methods=['PUT'])
+@cross_origin(origin='*',headers=['Content-Type','Authorization'])
+@logar
+def app_lead_associa_bu(leadid, buid):
+    if buid:
+        resp = ctl_procs.lead_bu_associa(lead_id=leadid, bu_id=buid)
+    else:
+        resp = {'status': 'ERRO', 'msg': 'bu_id precisa ser informado' }
     return Response(json.dumps(resp, default=DefaultConv), mimetype='application/json', status=200) 
 
 
@@ -276,9 +294,9 @@ def app_notification():
     return Response(json.dumps(resp, default=DefaultConv), mimetype='application/json', status=resp_status) 
 
 
-@app.route('/crm/<module>', methods=['GET', 'PUT']) # ['GET', 'POST', 'PUT', 'DELETE'])
+@app.route('/crm/direct/<module>', methods=['GET', 'POST', 'PUT', 'DELETE'])
 @logar
-def app_crm(module):
+def app_direct_module(module):
     if request.method == 'GET':
         args = request.args.to_dict()
         if not args:
@@ -323,8 +341,8 @@ def sys_info():
                         {       "app": APPCONTROL.app_name,
                                 "ip": APPCONTROL.ip_address,
                                 "Python": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
-                                "alive": datetime.now().strftime("%Y-%m-%d %H: %M: %S"),
-                                "since": webstart.strftime("%Y-%m-%d %H: %M: %S"),
+                                "alive": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                "since": webstart.strftime("%Y-%m-%d %H:%M:%S"),
                                 'LM': dal_lm.getPoolInfo(), 
                                 # "CRM": SUITECRM.Status()
                         }, default=DefaultConv

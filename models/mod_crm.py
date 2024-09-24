@@ -2,10 +2,141 @@
 # -*- coding: utf-8 -*-
 
 import re
+from datetime import datetime
 
+from dal import dal_crm
+from apicrm import SUITECRM as SuiteCRM 
 API_GEN_UserID = "e53b04f5-d41d-e195-e970-65e720c0cda5"
 
+def convLead2BU(leaddata:dict) -> dict:
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    contato_nome = leaddata.get("name")
+    contato_email = leaddata.get("email1")
+    contato_telefone = SuiteCRM.format_phone(leaddata.get("phone_home"),internacional=True)
+    contato_cpf = re.sub('[^0-9]', '', leaddata.get("cpf_contato_c",''))
 
+    empresa_nome = leaddata.get("department")
+    empresa_documento = re.sub('[^0-9]', '', leaddata.get("documento_c",''))
+    empresa_tiporua = leaddata.get("primary_address_street",'').split(' ')[0]
+    empresa_rua = leaddata.get("primary_address_street",'')[len(empresa_tiporua)+1:]
+    empresa_porta = leaddata.get("primary_address_street_2")
+    empresa_cidade = leaddata.get("primary_address_city",'')
+    empresa_uf = leaddata.get("primary_address_state",'').upper()
+    empresa_cep =  re.sub('[^0-9]', '', leaddata.get("primary_address_postalcode",''))
+    if (_phone:=SuiteCRM.format_phone(leaddata.get("phone_work"), internacional=True)):
+        empresa_ddd = _phone[2:4]
+        empresa_telefone = _phone[4:]
+    else:        
+        empresa_ddd = ""
+        empresa_telefone = ""
+    empresa_atividade = dal_crm.Atividade_GetCorpId(id=leaddata.get("gcr_titulos_id_c"))
+    empresa_email = "" 
+
+    if contato_nome and contato_email and contato_telefone and contato_cpf \
+        and empresa_nome and empresa_documento and empresa_tiporua and empresa_rua and empresa_porta and empresa_cidade and empresa_uf and empresa_atividade:
+        return {
+            "bus": [
+                {
+                    "origem": "CRM",
+                    "grupo": {
+                        "codigo": "0",
+                        "nome": empresa_nome,
+                        "email": empresa_email if empresa_email else contato_email,
+                    },
+                    "empresa": {
+                        "conta": "0",
+                        "id": "0_0_0_0",
+                        "status": 0,
+                        "autorizador": {
+                            "telefone": contato_telefone,
+                            "senha": "",
+                            "email": contato_email,
+                            "nome": contato_nome,
+                            "email_alternativo": "",
+                            "cpf": contato_cpf,
+                        },
+                        "razao_social": empresa_nome,
+                        "documento": empresa_documento,
+                        "documento_publica": False,
+                        "origem": "CRM",
+                        "origem_data": now
+                    },
+                    "endereco": {
+                        "uf": empresa_uf,
+                        "cidade": empresa_cidade,
+                        "bairro": "",
+                        "logradouro": empresa_rua,
+                        "numero": empresa_porta,
+                        "complemento": "",
+                        "referencia": "",
+                        "cep": empresa_cep,
+                        "visibilidade": 4,
+                        "tipo_logradouro": empresa_tiporua,
+                        "origem": "CRM",
+                        "origem_data": now
+                    },
+                    "infos": [
+                        {
+                            "id": "0_0_0_0",
+                            "agrupamento": "",
+                            "contrato": " ",
+                            "nome": empresa_nome,
+                            "descricao": "",
+                            "descricao_longa": "",
+                            "telefones": [
+                                {
+                                    "__ddd": empresa_ddd,
+                                    "numero": empresa_telefone,
+                                    "ramal": "",
+                                    "principal": True,
+                                    "publica": True,
+                                    "sigiloso": False,
+                                    "ordem": 1,
+                                    "tipo": "WhatsApp" if empresa_telefone[1] =="9" else "Cel",
+                                    "ddd": empresa_ddd,
+                                    "departamento": "",
+                                    "origem": "CRM",
+                                    "origem_data": now
+                                }
+                            ],
+                            "atividade": empresa_atividade,
+                            "url": "",
+                            "url_reserva": "",
+                            "produtos": [],
+                            "formas_de_pagamento": [],
+                            "logo": "",
+                            "emails": [empresa_email],
+                            "principal": True,
+                            "divulgacao": {
+                                "custo": 0.0,
+                                "data_inicio_divulgacao": now,
+                                "data_termino_divulgacao": "2050-01-01 00:00:00",
+                                "materia": "",
+                                "acao": "INCLUIR",
+                                "cobertura": f"@{empresa_cidade.upper()}#{empresa_uf}",
+                                "prioridade": "10"
+                            }
+                        }
+                    ],
+                    "keyf": f"{empresa_uf.upper()},{empresa_cidade.upper()}{empresa_tiporua.upper()}{empresa_rua.upper()}{empresa_porta}"
+                }
+            ],
+            "problemasDeEnderecamento": False,
+            "idcontalm": "0",
+            "tipocontalm": "P",
+            "autorizador": {
+                "telefone": "",
+                "senha": "",
+                "email": contato_email,
+                "nome": contato_nome,
+                "email_alternativo": "",
+                "cpf": contato_cpf,
+            },
+            "conta": "",
+            "origem": "CRM"
+        }
+    else:
+        return dict()
 
 class Account(object):
     def _asdict(self):
@@ -112,7 +243,6 @@ class Account(object):
         return cls
     
 
-
 class Lead(object):
     def _asdict(self):
         return self.__dict__
@@ -198,7 +328,7 @@ class Contact(object):
         cls.first_name = lead_data['first_name'] if lead_data.get('first_name') else 'sem primeiro nome'
         cls.last_name = lead_data.get('last_name')
         cls.email1 = lead_data.get('email1')
-        cls.cpf_c = re.sub('[^0-9]', '',lead_data.get('cpf_c',''))
+        cls.cpf_c = re.sub('[^0-9]', '', lead_data.get('cpf_c',''))
         cls.phone_work = lead_data.get('phone_work')
         cls.phone_fax = lead_data.get('phone_fax')
         cls.phone_home = lead_data.get('phone_home')

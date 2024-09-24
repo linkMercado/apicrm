@@ -583,3 +583,12 @@ def Atividade_GetID(cod:str=None, atv:str=None) -> str:
     else:
         return None
     
+
+def Atividade_GetCorpId(id:str) -> str:
+    cmd = f"select cod_titulo_corp from gcr_titulos where id='{id}'"
+    resp = mysql_pool.execute(cmd, cursor_args={"buffered": True, "dictionary": True}, commit=False)
+    if resp and len(resp) > 0:
+        return resp[0]['cod_titulo_corp']
+    else:
+        return None
+    
