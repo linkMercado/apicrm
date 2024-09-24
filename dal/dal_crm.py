@@ -571,10 +571,10 @@ def SecurityGroup_Get(CRM:SuiteCRM.SuiteCRM, name:str) -> tuple[str,dict]:
 
 def Atividade_GetID(cod:str=None, atv:str=None) -> str:
     if cod:
-        cmd = f"select id from gcr_titulos where cod_titulo_lm={cod}"
+        cmd = f"select id from gcr_titulos where cod_titulo_lm={cod} and deleted=0"
     elif atv:
         _atv = atv.replace("'","''")
-        cmd = f"select id from gcr_titulos where name='{_atv}'"
+        cmd = f"select id from gcr_titulos where name='{_atv}' and deleted=0"
     else:
         return None
     resp = mysql_pool.execute(cmd, cursor_args={"buffered": True, "dictionary": True}, commit=False)
@@ -585,7 +585,7 @@ def Atividade_GetID(cod:str=None, atv:str=None) -> str:
     
 
 def Atividade_GetCorpId(id:str) -> str:
-    cmd = f"select cod_titulo_corp from gcr_titulos where id='{id}'"
+    cmd = f"select cod_titulo_corp from gcr_titulos where id='{id}' and deleted=0"
     resp = mysql_pool.execute(cmd, cursor_args={"buffered": True, "dictionary": True}, commit=False)
     if resp and len(resp) > 0:
         return resp[0]['cod_titulo_corp']
