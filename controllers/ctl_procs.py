@@ -1750,15 +1750,15 @@ def lead_bu_cria(CRM:SuiteCRM.SuiteCRM=None, lead_id:str=None):
     lead = dal_crm.Lead_Get(CRM, {'id': lead_id})
     if len(lead) != 1:
         return {"msg": f"Foram encontratos {len(lead)} com lead id={id} no CRM", "candidatos":list() }
-    budata = mod_crm.convLead2BU(lead[0])
-    if budata:
+    resp = mod_crm.convLead2BU(lead[0])
+    if isinstance(resp, dict) and resp:
         headers = {
             "Content-Type": "application/json",
             "accept": "application/json",
         }    
-        resp = requests.post("http://internal.linkmercado.com.br/data/importar/empresa", json=budata, headers=headers)
+        resp = requests.post("http://internal.linkmercado.com.br/data/importar/empresa", json=resp, headers=headers)
     else:
-        resp = { 'status': "ERRO", 'msg':"Complete as informações no Lead para criar a BU" }
+        resp = { 'status': "ERRO", 'msg': f"Complete as informações no Lead para criar a BU:{resp}" }
     return resp
 
 

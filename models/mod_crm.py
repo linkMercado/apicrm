@@ -8,7 +8,7 @@ from dal import dal_crm
 from apicrm import SUITECRM as SuiteCRM 
 API_GEN_UserID = "e53b04f5-d41d-e195-e970-65e720c0cda5"
 
-def convLead2BU(leaddata:dict) -> dict:
+def convLead2BU(leaddata:dict) -> any:
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     contato_nome = leaddata.get("name")
     contato_email = leaddata.get("email1")
@@ -32,9 +32,33 @@ def convLead2BU(leaddata:dict) -> dict:
     empresa_atividade = dal_crm.Atividade_GetCorpId(id=leaddata.get("gcr_titulos_id_c"))
     empresa_email = "" 
 
-    if contato_nome and contato_email and contato_telefone and contato_cpf \
-        and empresa_nome and empresa_documento and empresa_tiporua and empresa_rua and empresa_porta and empresa_cidade and empresa_uf and empresa_atividade:
-        return {
+    falta = ""
+    if not contato_nome:
+        falta += "nome do contato,"
+    if not contato_email:
+        falta += "email do contato,"
+    if not contato_telefone:
+        falta += "telefone do contato,"
+    if not contato_cpf:
+        falta += "documento do contato,"
+
+    if not empresa_nome:
+        falta += "nome da empresa,"        
+    if not empresa_documento:
+        falta += "CNPJ da empresa,"        
+    if not empresa_tiporua and empresa_rua:
+        falta += "endereço da empresa,"        
+    if not empresa_porta:
+        falta += "número da porta da empresa,"        
+    if not empresa_cidade:
+        falta += "cidade da empresa,"        
+    if not empresa_uf:
+        falta += "estado da empresa,"        
+    if not empresa_atividade:
+        falta += "atividade da empresa,"        
+    if falta:
+        return falta[:-1]
+    return {
             "bus": [
                 {
                     "origem": "CRM",
@@ -135,8 +159,6 @@ def convLead2BU(leaddata:dict) -> dict:
             "conta": "",
             "origem": "CRM"
         }
-    else:
-        return dict()
 
 class Account(object):
     def _asdict(self):
