@@ -4,7 +4,7 @@ import string
 
 import requests
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from apicrm import LOGGER as logger
 from apicrm import SUITECRM as SuiteCRM 
 from lm_packages.Extras import TAB, CRLF
@@ -38,6 +38,18 @@ def conv_date(data) -> date:
     if check_date_format(data) == 'BRA':
         return datetime.strptime(data, '%d/%m/%Y').date()
     return ''
+
+
+def grupo_a_menos_b(ga, gb) -> str:
+    if ga is None:
+        ga = list()
+    if gb is None:
+        gb = list()
+    if isinstance(ga, str):
+        ga = list(set([s for s in ga.split(',') if s]))
+    if isinstance(gb, str):
+        gb = list(set([s for s in gb.split(',') if s]))
+    return ','.join(list(set(ga) - set(gb)))
 
 
 def GetBOAccount(CRM:SuiteCRM.SuiteCRM, id:str=None, id_conta_lm:str=None) -> list[dict]:
@@ -835,8 +847,6 @@ def pegaIDs_grupos_seguranca(CRM:SuiteCRM.SuiteCRM, *user_ids) -> str:
     grupos = list()
     for user_id in user_ids:
         grupos = list(set(grupos) | set(dal_crm.User_get_SecurityGroupHierarchy(CRM, user_id).split(',')))
-
-    #grupos = list(set([s for s in f"{grupo_RC},{grupo_GC},{grupo_ER}".split(',') if s]))
     # normaliza a resposta
     if grupos:
         return ','.join(grupos)
@@ -986,7 +996,7 @@ def sync_boconta(CRM:SuiteCRM.SuiteCRM=None, boaccount_data:dict=dict()) -> str:
     # precisa atualizar o RC ou o GC ?
     if New_sec_grupo != sec_grupo:
         # remove grupos de segurança antigos
-        dal_crm.BOAccount_RemoveGrupoSeguranca(CRM, BOAccount['id'], grupos=sec_grupo)
+        dal_crm.BOAccount_RemoveGrupoSeguranca(CRM, BOAccount['id'], grupos=grupo_a_menos_b(sec_grupo, New_sec_grupo))
 
         # atualiza RC e GC do BOAccount           
         s, _ = dal_crm.BOAccount_Update(CRM, {'id': BOAccount['id'], 
@@ -1014,8 +1024,8 @@ def sync_boconta(CRM:SuiteCRM.SuiteCRM=None, boaccount_data:dict=dict()) -> str:
 
                 # tratando contatos
                 for contato in dal_crm.Account_GetContacts(CRM, crm_account_id=BU['id']):
-                    dal_crm.Contact_RemoveGrupoSeguranca(CRM, contato['id'], grupos=GC_sec_grupo_id)
-                    dal_crm.Contact_AssociaGruposSeguranca(CRM, contato['id'], crm_sec_grup_ids=New_GC_sec_grupo_id)
+                    dal_crm.Contact_RemoveGrupoSeguranca(CRM, contato['id'], grupos=grupo_a_menos_b(GC_sec_grupo_id, New_GC_sec_grupo_id))
+                    dal_crm.Contact_AssociaGruposSeguranca(CRM, contato['id'], crm_sec_grup_ids=grupo_a_menos_b(New_GC_sec_grupo_id, GC_sec_grupo_id))
 
                 # tratando tarefas
                 for tarefa in GetTask(CRM, parent_id=BU['id']):
@@ -1024,8 +1034,8 @@ def sync_boconta(CRM:SuiteCRM.SuiteCRM=None, boaccount_data:dict=dict()) -> str:
                         dal_crm.Task_Update(CRM, {'id': tarefa['id'], 'assigned_user_id': New_GC_id, 'security_ids': New_GC_sec_grupo_id})
                     else:
                         # coloca a tarefa visível para o newGC e remove a visibilidade do GC anterior
-                        dal_crm.Task_AssociaGruposSeguranca(CRM, tarefa['id'], crm_sec_grup_ids=New_GC_sec_grupo_id)
-                        dal_crm.Task_RemoveGrupoSeguranca(CRM, tarefa['id'], grupos=GC_sec_grupo_id)
+                        dal_crm.Task_AssociaGruposSeguranca(CRM, tarefa['id'], crm_sec_grup_ids=sec_grupo(New_GC_sec_grupo_id, GC_sec_grupo_id))
+                        dal_crm.Task_RemoveGrupoSeguranca(CRM, tarefa['id'], grupos=grupo_a_menos_b(GC_sec_grupo_id, New_GC_sec_grupo_id))
 
                 # tratando ticket
                 for ticket in GetTicket(CRM, account_id=BU['id']):
@@ -1034,17 +1044,17 @@ def sync_boconta(CRM:SuiteCRM.SuiteCRM=None, boaccount_data:dict=dict()) -> str:
                         dal_crm.Ticket_Update(CRM, {'id': ticket['id'], 'assigned_user_id': New_GC_id, 'security_ids': New_GC_sec_grupo_id})
                     else:
                         # coloca a tarefa visível para o newGC e remove a visibilidade do GC anterior
-                        dal_crm.Ticket_AssociaGruposSeguranca(CRM, ticket['id'], crm_sec_grup_ids=New_GC_sec_grupo_id)
-                        dal_crm.Ticket_RemoveGrupoSeguranca(CRM, ticket['id'], grupos=GC_sec_grupo_id)
+                        dal_crm.Ticket_AssociaGruposSeguranca(CRM, ticket['id'], crm_sec_grup_ids=grupo_a_menos_b(New_GC_sec_grupo_id, GC_sec_grupo_id))
+                        dal_crm.Ticket_RemoveGrupoSeguranca(CRM, ticket['id'], grupos=grupo_a_menos_b(GC_sec_grupo_id, New_GC_sec_grupo_id))
 
                 # acerta o GC e RC dos Contratos dessa BU
                 Contratos = dal_crm.Account_GetContracts(CRM, BU['id'], fulldata=True)
                 for Contrato in Contratos:
-                    dal_crm.Contract_RemoveGrupoSeguranca(CRM, Contrato['id'], grupos=sec_grupo)
+                    dal_crm.Contract_RemoveGrupoSeguranca(CRM, Contrato['id'], grupos=grupo_a_menos_b(sec_grupo, New_sec_grupo))
                     dal_crm.Contract_Update(CRM, { 
                                                 'id': Contrato['id'],
                                                 'gerente_relacionamento_id': New_GC_id,
-                                                'security_ids': New_sec_grupo
+                                                'security_ids': grupo_a_menos_b(New_sec_grupo, sec_grupo)
                                                 }
                                             )
     elif New_name:
@@ -1080,6 +1090,9 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
 
     atividade_principal = ajusta_dict(account_data, 'atividade_principal_c', 'atividade_principal')
     cod_titulo_lm = ajusta_dict(account_data, 'cod_titulo_lm_c', 'cod_titulo_lm')
+    if not cod_titulo_lm and atividade_principal and atividade_principal.isnumeric():
+        atividade_principal = ""
+        cod_titulo_lm = ajusta_dict(account_data, 'cod_titulo_lm_c', 'atividade_principal_c')
     ajusta_dict(account_data, 'name', 'nome_fantasia')
     ajusta_dict(account_data, 'razao_social_c', 'razao_social')
     ajusta_dict(account_data, 'email1', 'email')
@@ -1148,7 +1161,7 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
 
     if cod_titulo_lm or atividade_principal:
         # transforma cod/nome em id
-        account_data['gcr_titulos_id_c'] = dal_crm.Atividade_GetID(cod=cod_titulo_lm, atv=atividade_principal)
+        account_data['gcr_titulos_id_c'], account_data['atividade_principal_c'] = dal_crm.Atividade_GetIDandName(cod=cod_titulo_lm, atv=atividade_principal)
 
     if representante_comercial_name:
         account_data['assigned_user_name'] = representante_comercial_name.upper()
@@ -1205,7 +1218,6 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
         for k in contratos:
             dal_crm.BOAccount_AssociaContracts(CRM, crm_id=BOAccount['id'], crm_contract_ids=k['id'])
 
-
     # pega os ids do RC e do GC e os grupos de segurança
     RC_id = BOAccount['assigned_user_id']
     GC_id = BOAccount.get('users_gcr_contabackoffice_1users_ida')
@@ -1234,8 +1246,8 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
         dal_lm.PutSuiteID(crm_BU.get('bu_id_c'), suiteid=crm_BU.get('id'))
     else: # Atualiza a BU         
         # remove grupos anteriores
-        if sec_grupo != New_sec_grupo:   
-            dal_crm.Account_RemoveGrupoSeguranca(CRM, crm_BU['id'], grupos=sec_grupo)
+        if sec_grupo != New_sec_grupo:
+            dal_crm.Account_RemoveGrupoSeguranca(CRM, crm_BU['id'], grupos=grupo_a_menos_b(sec_grupo, New_sec_grupo))
         
         # indica qual a BU
         account_data['id'] = crm_BU['id']
@@ -1243,6 +1255,22 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
         # atualizou ?
         if s:
             return s
+
+    # BU tem atividade ?
+    if not (crm_BU.get('gcr_titulos_id_c') and crm_BU.get('atividade_principal_c')):
+        task_data = { 'name': f"BU: {crm_BU['name']} SEM atividade",
+            'priority': 'High',
+            'id_conta_lm_c': crm_BU['id_conta_lm_c'],
+            'assigned_user_id': SuiteCRM.CAD_GEN_UserID,
+            'date_start': datetime.today(),
+            'date_due': datetime.today() + timedelta(days=2),
+            'descricao_c': f"Atualizar a atividade da BU: {crm_BU['name']}",
+            'parent_type': 'Accounts',
+            'parent_id': crm_BU['id'],
+            'date_entered': datetime.today(),
+            'linkexterno_c': f"https://plataforma.linkmercado.com.br/private/area-de-clientes/conta/{crm_BU.get('id_conta_lm_c')}/empresas/{crm_BU['id']}/editar"
+        }
+        dal_crm.Task_Create(CRM, task_data)
 
     # é para associar a algum lead ?
     if lead_id:
@@ -1275,7 +1303,7 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
     # precisa atualizar o RC ou o GC ?
     if New_sec_grupo != sec_grupo:
         # remove grupos de segurança antigos
-        dal_crm.BOAccount_RemoveGrupoSeguranca(CRM, BOAccount['id'], grupos=sec_grupo)
+        dal_crm.BOAccount_RemoveGrupoSeguranca(CRM, BOAccount['id'], grupos=grupo_a_menos_b(sec_grupo, New_sec_grupo))
 
         # atualiza RC e GC do BOAccount           
         s, _ = dal_crm.BOAccount_Update(CRM, {'id': BOAccount['id'], 
@@ -1288,7 +1316,7 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
         BUs = dal_crm.BOAccount_GetAccounts(CRM, BOAccount['id'])
         for BU in BUs:
             if BU['id'] != crm_BU['id']:
-                dal_crm.Account_RemoveGrupoSeguranca(CRM, BU['id'], grupos=sec_grupo)
+                dal_crm.Account_RemoveGrupoSeguranca(CRM, BU['id'], grupos=grupo_a_menos_b(sec_grupo, New_sec_grupo))
                 dal_crm.Account_Update(CRM, { 
                                             'id': BU['id'],
                                             'gerente_relacionamento_id': New_GC_id,
@@ -1303,8 +1331,8 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
 
                 # tratando contatos
                 for contato in dal_crm.Account_GetContacts(CRM, crm_account_id=BU['id']):
-                    dal_crm.Contact_RemoveGrupoSeguranca(CRM, contato['id'], grupos=GC_sec_grupo_id)
-                    dal_crm.Contact_AssociaGruposSeguranca(CRM, contato['id'], crm_sec_grup_ids=New_GC_sec_grupo_id)
+                    dal_crm.Contact_RemoveGrupoSeguranca(CRM, contato['id'], grupos=grupo_a_menos_b(GC_sec_grupo_id,New_GC_sec_grupo_id))
+                    dal_crm.Contact_AssociaGruposSeguranca(CRM, contato['id'], crm_sec_grup_ids=grupo_a_menos_b(New_GC_sec_grupo_id,GC_sec_grupo_id))
 
                 # tratando tarefas
                 for tarefa in GetTask(CRM, parent_id=BU['id']):
@@ -1313,8 +1341,8 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
                         dal_crm.Task_Update(CRM, {'id': tarefa['id'], 'assigned_user_id': New_GC_id, 'security_ids': New_GC_sec_grupo_id})
                     else:
                         # coloca a tarefa visível para o newGC e remove a visibilidade do GC anterior
-                        dal_crm.Task_AssociaGruposSeguranca(CRM, tarefa['id'], crm_sec_grup_ids=New_GC_sec_grupo_id)
-                        dal_crm.Task_RemoveGrupoSeguranca(CRM, tarefa['id'], grupos=GC_sec_grupo_id)
+                        dal_crm.Task_RemoveGrupoSeguranca(CRM, tarefa['id'], grupos=grupo_a_menos_b(GC_sec_grupo_id,New_GC_sec_grupo_id))
+                        dal_crm.Task_AssociaGruposSeguranca(CRM, tarefa['id'], crm_sec_grup_ids=grupo_a_menos_b(New_GC_sec_grupo_id,GC_sec_grupo_id))
 
                 # tratando ticket
                 for ticket in GetTicket(CRM, account_id=BU['id']):
@@ -1323,13 +1351,13 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
                         dal_crm.Ticket_Update(CRM, {'id': ticket['id'], 'assigned_user_id': New_GC_id, 'security_ids': New_GC_sec_grupo_id})
                     else:
                         # coloca a tarefa visível para o newGC e remove a visibilidade do GC anterior
-                        dal_crm.Ticket_AssociaGruposSeguranca(CRM, ticket['id'], crm_sec_grup_ids=New_GC_sec_grupo_id)
-                        dal_crm.Ticket_RemoveGrupoSeguranca(CRM, ticket['id'], grupos=GC_sec_grupo_id)
+                        dal_crm.Ticket_RemoveGrupoSeguranca(CRM, ticket['id'], grupos=grupo_a_menos_b(GC_sec_grupo_id, New_GC_sec_grupo_id))
+                        dal_crm.Ticket_AssociaGruposSeguranca(CRM, ticket['id'], crm_sec_grup_ids=grupo_a_menos_b(New_GC_sec_grupo_id,GC_sec_grupo_id))
 
             # acerta o GC e RC dos Contratos dessa BU
             Contratos = dal_crm.Account_GetContracts(CRM, BU['id'])
             for Contrato in Contratos:
-                dal_crm.Contract_RemoveGrupoSeguranca(CRM, Contrato['id'], grupos=sec_grupo)
+                dal_crm.Contract_RemoveGrupoSeguranca(CRM, Contrato['id'], grupos=grupo_a_menos_b(sec_grupo,New_sec_grupo))
                 dal_crm.Contract_Update(CRM, { 
                                             'id': Contrato['id'],
                                             'gerente_relacionamento_id': New_GC_id,
@@ -1665,7 +1693,7 @@ def sync_contract(CRM:SuiteCRM.SuiteCRM=None, contract_data:dict=dict()) -> str:
     if crm_contrato:
         # remove o grupo antigo
         if New_grupos_sec != grupos_sec:
-            dal_crm.Contract_RemoveGrupoSeguranca(CRM, crm_contrato['id'], grupos_sec)
+            dal_crm.Contract_RemoveGrupoSeguranca(CRM, crm_contrato['id'], grupo_a_menos_b(grupos_sec,New_grupos_sec))
 
         # se existe, atualiza as informações
         contract_data['id'] = crm_contrato.get('id')
@@ -1995,6 +2023,89 @@ def processa_arquivo_deleta_contratos(file_path:str, skiplines:int=0) -> str:
     return f"arquivo com {row_num-1} registros processado, {qtd_deletados} contratos deletados e {qtd_erros_formatacao} erros de formatação no CSV"
 
 
+def proc_atualiza_grupos_seguranca() -> dict:
+    CRM = SuiteCRM.SuiteCRM(logger)
+    msg = dict()
+    
+    # trata tickets
+    lidos, pulados, atuados, erros = 0, 0, 0, 0
+    tickets = dal_crm.Ticket_Get(CRM, {'grupo_seguranca_gerado_c':'N'})
+    for ticket in tickets:
+        lidos += 1
+        # quem são os GC e RC da BU desse Ticket ?
+        bu_id = ticket.get('account_id')
+        if bu_id:
+            bu = dal_crm.Account_Get(CRM, {'id': bu_id})
+            if bu:
+                RC_id = bu[0].get('assigned_user_id')
+                GC_id = bu[0].get('users_accounts_1users_ida')
+            else:
+                erros += 1
+                dal_crm.Ticket_Update(CRM, {'id': ticket['id'], 'grupo_seguranca_gerado_c':'E'})
+        else:
+            pulados += 1
+            dal_crm.Ticket_Update(CRM, {'id': ticket['id'], 'grupo_seguranca_gerado_c':'X'})
+            continue
+            # o que fazer quando não está associadp a BU ?
+
+        # deixa visível pela hierarquia do 'assigned_to'
+        sec_groups = pegaIDs_grupos_seguranca(CRM, ticket['assigned_user_id'], RC_id, GC_id)
+        cur_sec_groups = [gs['id'] for gs in dal_crm.Ticket_GetGruposSeguranca(CRM, ticket['id'])]
+        
+        # remove os indesejáveis
+        dal_crm.Ticket_RemoveGrupoSeguranca(CRM, ticket['id'], grupos=grupo_a_menos_b(cur_sec_groups, sec_groups))
+        # associa
+        dal_crm.Ticket_AssociaGruposSeguranca(CRM, ticket['id'], crm_sec_grup_ids=grupo_a_menos_b(sec_groups, cur_sec_groups))
+        
+        # marca o ticket como tratado (segurança)
+        dal_crm.Ticket_Update(CRM, {'id': ticket['id'], 'grupo_seguranca_gerado_c':'S'})
+        atuados += 1
+    msg['tickets'] = {'lidos': lidos, 'pulados': pulados, 'atuados': atuados, 'erro': erros}
+
+    # trata tarefas
+    tasks = dal_crm.Task_Get(CRM, {'grupo_seguranca_gerado_c':'N'})
+    lidos, pulados, atuados, erros = 0, 0, 0, 0
+    for task in tasks:
+        lidos += 1
+        # quem são os GC e RC da BU desse Ticket ?
+        contract_id = task.get('aos_contracts_id_c')
+        if contract_id:
+            contract = dal_crm.Contract_Get(CRM, {'id': contract_id})
+            if contract:
+                bu_id = contract[0].get("contract_account_id")
+                if bu_id:
+                    bu = dal_crm.Account_Get(CRM, {'id': bu_id})
+                    RC_id = bu[0].get('assigned_user_id')
+                    GC_id = bu[0].get('users_accounts_1users_ida')
+                else:
+                    erros += 1
+                    continue
+            else:
+                erros += 1
+                dal_crm.Task_Update(CRM, {'id': task['id'], 'grupo_seguranca_gerado_c':'E'})
+                continue
+        else:
+            dal_crm.Task_Update(CRM, {'id': task['id'], 'grupo_seguranca_gerado_c':'X'})
+            pulados += 1
+            continue
+            # o que fazer quando não está associado a um contrato ?
+
+        # deixa visível pela hierarquia do 'assigned_to'
+        sec_groups = pegaIDs_grupos_seguranca(CRM, task['assigned_user_id'], RC_id, GC_id)
+        cur_sec_groups = [gs['id'] for gs in dal_crm.Task_GetGruposSeguranca(CRM, task  ['id'])]
+        
+        # remove os indesejáveis
+        dal_crm.Task_RemoveGrupoSeguranca(CRM, task['id'], grupos=grupo_a_menos_b(cur_sec_groups, sec_groups))
+        # associa
+        dal_crm.Task_AssociaGruposSeguranca(CRM, task['id'], crm_sec_grup_ids=grupo_a_menos_b(sec_groups, cur_sec_groups))
+        
+        # marca o ticket como tratado (segurança)
+        dal_crm.Task_Update(CRM, {'id': task['id'], 'grupo_seguranca_gerado_c':'S'})
+        atuados += 1
+    msg['tarefas'] = {'lidos': lidos, 'pulados': pulados, 'atuados': atuados, 'erro': erros}
+
+    return str(msg)
+
 def coloca_contatos_nos_BOAccounts():
     CRM = SuiteCRM.SuiteCRM(logger)     
 
@@ -2144,15 +2255,15 @@ def acerta_grupos_de_seguranca():
                 super_grupo = list(set([s for s in f"{master_RC_sec_ids},{master_GC_sec_ids},{New_sec_RC_ids},{New_sec_ER_ids}".split(',') if s]))
                 grupo_atual = [g['id'] for g in dal_crm.Contract_GetGruposSeguranca(CRM, contrato['id'])]
                 # remove grupo de segurança que estão 'a mais' (atual - novo)
-                dal_crm.Contract_RemoveGrupoSeguranca(CRM, contrato['id'], ','.join(list(set(grupo_atual) - set(super_grupo))))
+                dal_crm.Contract_RemoveGrupoSeguranca(CRM, contrato['id'], grupo_a_menos_b(grupo_atual, super_grupo))
                 # complementa com os demais (novo - atual)
-                dal_crm.Contract_AssociaGruposSeguranca(CRM, contrato['id'], ','.join(list(set(super_grupo) - set(grupo_atual))))
+                dal_crm.Contract_AssociaGruposSeguranca(CRM, contrato['id'], grupo_a_menos_b(super_grupo, grupo_atual))
 
             # acerta grupo de segurança da BU
             super_grupo = list(set([s for s in f"{master_RC_sec_ids},{master_GC_sec_ids},{lista_gsec_RC_id}".split(',') if s]))
             grupo_atual = [g['id'] for g in dal_crm.Account_GetGruposSeguranca(CRM, BU['id'])]
             # remove grupo de segurança que estão 'a mais' (atual - novo)
-            dal_crm.Account_RemoveGrupoSeguranca(CRM, BU['id'], ','.join(list(set(grupo_atual) - set(super_grupo))))
+            dal_crm.Account_RemoveGrupoSeguranca(CRM, BU['id'], grupo_a_menos_b(grupo_atual, super_grupo))
             # complementa com os demais (novo - atual)
             dal_crm.Account_AssociaGruposSeguranca(CRM, BU['id'], ','.join(list(set(super_grupo) - set(grupo_atual))))
             SEC_BU[BU['id']] = super_grupo
@@ -2161,7 +2272,7 @@ def acerta_grupos_de_seguranca():
         super_grupo = list(set([s for s in f"{master_RC_sec_ids},{master_GC_sec_ids},{master_gsec_RC_id}".split(',') if s]))
         grupo_atual = [g['id'] for g in dal_crm.BOAccount_GetGruposSeguranca(CRM, BOAccount['id'])]
         # remove grupo de segurança que estão 'a mais' (atual - novo)
-        dal_crm.BOAccount_RemoveGrupoSeguranca(CRM, BOAccount['id'], ','.join(list(set(grupo_atual) - set(super_grupo))))
+        dal_crm.BOAccount_RemoveGrupoSeguranca(CRM, BOAccount['id'], grupo_a_menos_b(grupo_atual, super_grupo))
         # complementa com os demais (novo - atual)
         dal_crm.BOAccount_AssociaGruposSeguranca(CRM, BOAccount['id'], ','.join(list(set(super_grupo) - set(grupo_atual))))
 
@@ -2175,7 +2286,7 @@ def acerta_grupos_de_seguranca():
             super_grupo = list(set(super_grupo) | set(SEC_BU[BU['id']]))
         grupo_atual = [g['id'] for g in dal_crm.Contact_GetGruposSeguranca(CRM, Contato['id'])]
         # remove grupo de segurança que estão 'a mais' (atual - novo)
-        dal_crm.Contact_RemoveGrupoSeguranca(CRM, Contato['id'], ','.join(list(set(grupo_atual) - set(super_grupo))))
+        dal_crm.Contact_RemoveGrupoSeguranca(CRM, Contato['id'], grupo_a_menos_b(grupo_atual, super_grupo))
         # complementa com os demais (novo - atual)
         dal_crm.Contact_AssociaGruposSeguranca(CRM, Contato['id'], ','.join(list(set(super_grupo) - set(grupo_atual))))
 
@@ -2193,7 +2304,7 @@ def acerta_grupos_de_seguranca():
         grupo_atual = [g['id'] for g in dal_crm.Lead_GetGruposSeguranca(CRM, Lead['id'])]
         grupo_lead = list(set(lead_sec_ids) | set(sec_RC_ids))
         # remove grupo de segurança que estão 'a mais' (atual - novo)
-        dal_crm.Lead_RemoveGrupoSeguranca(CRM, Lead['id'], ','.join(list(set(grupo_atual) - set(grupo_lead))))
+        dal_crm.Lead_RemoveGrupoSeguranca(CRM, Lead['id'], grupo_a_menos_b(grupo_atual, grupo_lead))
         # complementa com os demais (novo - atual)
         dal_crm.Lead_AssociaGruposSeguranca(CRM, Lead['id'], ','.join(list(set(grupo_lead) - set(grupo_atual))))
 
@@ -2201,20 +2312,6 @@ def acerta_grupos_de_seguranca():
 
     Tarefas = dal_crm.Tasks(CRM)
 
-def acerta_atividade_em_bu():
-    print("** INICIO **:", end="")
-    CRM = SuiteCRM.SuiteCRM(logger)     
-    Accounts = dal_crm.Accounts(CRM)
-    for acc in Accounts:
-        if not acc.get('gcr_titulos_id_c'):
-            account_data = dict()
-            account_data['id'] = acc['id']
-            account_data['gcr_titulos_id_c'] = dal_crm.Atividade_GetID(atv=acc.get('atividade_principal_c'))
-            s, d = dal_crm.Account_Update(CRM, account_data)
-            print(".", end="")
-        else:
-            print("-", end="")
-    print("** FIM **")
 
 
 def testa_nomes_grupos_de_seguranca():
@@ -2235,5 +2332,4 @@ def testa_nomes_grupos_de_seguranca():
 
 #testa_nomes_grupos_de_seguranca()
 
-# acerta_atividade_em_bu()
 # acerta_grupos_de_seguranca()
