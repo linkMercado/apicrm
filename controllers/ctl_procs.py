@@ -1268,7 +1268,7 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
             'parent_type': 'Accounts',
             'parent_id': crm_BU['id'],
             'date_entered': datetime.today(),
-            'linkexterno_c': f"https://plataforma.linkmercado.com.br/private/area-de-clientes/conta/{crm_BU.get('id_conta_lm_c')}/empresas/{crm_BU['id']}/editar"
+            'linkexterno_c': f"https://plataforma.linkmercado.com.br/private/area-de-clientes/conta/{crm_BU.get('id_conta_lm_c')}/empresas" + (f"/{crm_BU['bu_id_C']}/editar" if crm_BU['bu_id_C'] else "")
         }
         dal_crm.Task_Create(CRM, task_data)
 
