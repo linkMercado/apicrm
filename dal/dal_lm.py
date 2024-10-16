@@ -182,25 +182,37 @@ def GetSuiteID(buid:str) -> str:
     return None
 
 
-def PutSuiteID(buid:str, suiteid:str=None, leadid:str=None) -> bool:
+def PutSuiteID(buid:str, suiteid:str=None, leadid:str=None, rcemail:str=None) -> bool:
     """"Atualiza o SuiteId e troca a company para LM
 
     Keyword arguments:
     buid    -- código da BU
-    suiteid -- código da Conta no SuiteCRM
+    suiteid -- código da Conta no CRM
+    leadid  -- código do Lead no CRM
+    rcemail -- email do Representante Comercial
     Return: bool indicando se conseguiu ou não fazer a atualização
     """
 
-    if buid and (suiteid or leadid):
-        set1 = f"bu.suite_id = '{suiteid}', ac.company_id = CASE WHEN '{suiteid}' = '' THEN ac.company_id ELSE 3 END" if suiteid else ""
+    if buid and (suiteid is not None or leadid or rcemail):
+        set1 = f"bu.suite_id = '{suiteid}', ac.company_id = CASE WHEN '{suiteid}' = '' THEN ac.company_id ELSE 3 END" if suiteid is not None else ""
         set2 = f"bu.lead_id = '{leadid}'" if leadid else ""
+        set3 = f"bu.rc_requestor = '{rcemail}'" if rcemail else ""
+        set2 = f",{set2}" if set2 and set1 else set2
+        set3 = f",{set3}" if set3 and (set1 or set2) else set3
         cmd = f"""UPDATE linkmercado.core_business_units bu
                   JOIN linkmercado.core_accounts ac
                     ON ac.id = bu.account_id
-                  SET {set1}{', ' if set1 else ''}{set2} 
+                  SET {set1}{set2}{set3} 
                   WHERE bu.id = '{buid}' and bu.account_id > 1"""        
         resp = mysql_pool.execute(cmd, cursor_args={"buffered": True, "dictionary": True}, commit=True, lastInserted=True)
-        return True if resp and resp.get('rowcount') else False
+        if resp and resp.get('rowcount'):
+            # avisa para o corporativo buscar essa BU caso tenha informado o LeadId
+            if leadid:
+                cmd = f"INSERT INTO linkmercado.data_import_corporate_queues (business_unit_id, STATUS, priority, created_at, updated_at) VALUES ({buid}, 0, 30, NOW(), NOW()"
+                resp = mysql_pool.execute(cmd, cursor_args={"buffered": True, "dictionary": True}, commit=True, lastInserted=True)
+                if not(resp and resp.get('rowcount')):
+                    logger.critical(f"Não foi possível atualizar fila sync BO->Corporativo para a BU:{buid}")
+            return True
     return False
 
 

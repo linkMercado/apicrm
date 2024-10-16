@@ -175,9 +175,16 @@ def User_getHierarquia(CRM:SuiteCRM.SuiteCRM, id:str) -> list:
         return list()
     
 
-def User_get_SecurityGroupHierarchy(CRM:SuiteCRM.SuiteCRM, id:str) -> str:
+def User_get_SecurityGroupHierarchyIds(CRM:SuiteCRM.SuiteCRM, id:str) -> str:
     if id:
-        return CRM.get_securityGroupHierarchy(id)
+        return CRM.get_securityGroupHierarchyId(id)
+    else:
+        return ""
+
+
+def User_get_SecurityGroupId(CRM:SuiteCRM.SuiteCRM, user_id:str) -> str:
+    if user_id:
+        return CRM.get_securityGroupId(user_id=user_id)
     else:
         return ""
 

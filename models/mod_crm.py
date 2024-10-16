@@ -8,8 +8,8 @@ from dal import dal_crm
 from apicrm import SUITECRM as SuiteCRM 
 API_GEN_UserID = "e53b04f5-d41d-e195-e970-65e720c0cda5"
 
-def convLead2BU(leaddata:dict) -> any:
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+def convLead2BU(leaddata:dict, rc_email:str) -> any:
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     contato_nome = leaddata.get("name")
     contato_email = leaddata.get("email1")
     contato_telefone = SuiteCRM.format_phone(leaddata.get("phone_home"),internacional=True)
@@ -68,6 +68,8 @@ def convLead2BU(leaddata:dict) -> any:
                         "email": empresa_email if empresa_email else contato_email,
                     },
                     "empresa": {
+                        "lead_id" : leaddata['id'],
+                        "rc_requestor": rc_email,
                         "conta": "0",
                         "id": "0_0_0_0",
                         "status": 0,
@@ -142,7 +144,7 @@ def convLead2BU(leaddata:dict) -> any:
                             }
                         }
                     ],
-                    "keyf": f"{empresa_uf.upper()},{empresa_cidade.upper()}{empresa_tiporua.upper()}{empresa_rua.upper()}{empresa_porta}"
+                    "keyf": f"{empresa_uf.upper()}{empresa_cidade.upper()}{empresa_tiporua.upper()}{empresa_rua.upper()}{empresa_porta}".replace(' ','')
                 }
             ],
             "problemasDeEnderecamento": False,
@@ -371,7 +373,7 @@ class BOConta(object):
         self.name = name
         self.assigned_user_id = representante_comercial_id
         self.id_conta_lm = id_conta_lm
-        self.users_gcr_contabackoffice_1users_ida = gerente_conta_id
+        self.user_id_c = gerente_conta_id
 
     @classmethod
     def fromBO(cls, bodata:dict):    

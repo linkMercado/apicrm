@@ -65,6 +65,8 @@ def app_procedures(procedure):
         msg = ctl_procs.processa_arquivo_deleta_contratos(**args)
     elif procedure == 'atualiza_grupos_seguranca':
         msg = ctl_procs.proc_atualiza_grupos_seguranca()
+    elif procedure == 'acerta_grupos_de_seguranca':
+        msg = ctl_procs.acerta_grupos_de_seguranca(**args)
     elif procedure == 'acerta_GC':
         msg = ctl_procs.remove_GC_de_BOAccounts_sem_contrato_ativo()
     else:
@@ -162,6 +164,7 @@ def app_sync_module(module:str):
 def app_lead_busca_bus_candidatas(leadid):
     resp = ctl_procs.bus_candidatas(lead_id=leadid)
     return Response(json.dumps(resp, default=DefaultConv), mimetype='application/json', status=200) 
+
 
 @app.route('/crm/lead/<leadid>/associa_bu', methods=['POST'])
 @cross_origin(origin='*',headers=['Content-Type','Authorization'])
