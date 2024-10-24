@@ -17,12 +17,14 @@ def convLead2BU(leaddata:dict, rc_email:str) -> any:
 
     empresa_nome = leaddata.get("department")
     empresa_documento = re.sub('[^0-9]', '', leaddata.get("documento_c",''))
-    empresa_tiporua = leaddata.get("primary_address_street",'').split(' ')[0]
-    empresa_rua = leaddata.get("primary_address_street",'')[len(empresa_tiporua)+1:]
-    empresa_porta = leaddata.get("primary_address_street_2")
-    empresa_cidade = leaddata.get("primary_address_city",'')
-    empresa_uf = leaddata.get("primary_address_state",'').upper()
-    empresa_cep =  re.sub('[^0-9]', '', leaddata.get("primary_address_postalcode",''))
+    empresa_tiporua = leaddata.get("tipo_logradouro_c",'')
+    empresa_rua = leaddata.get("nome_logradouro_c",'')
+    empresa_porta = leaddata.get("numero_c")
+    empresa_complemento = leaddata.get("complemento_c")
+    empresa_bairro = leaddata.get("nome_bairro_c",'')
+    empresa_cidade = leaddata.get("nome_cidade_c",'')
+    empresa_uf = leaddata.get("estado_c",'').upper()
+    #empresa_cep =  re.sub('[^0-9]', '', leaddata.get("primary_address_postalcode",''))
     if (_phone:=SuiteCRM.format_phone(leaddata.get("phone_work"), internacional=True)):
         empresa_ddd = _phone[2:4]
         empresa_telefone = _phone[4:]
@@ -46,7 +48,7 @@ def convLead2BU(leaddata:dict, rc_email:str) -> any:
         falta += "nome da empresa,"        
     if not empresa_documento:
         falta += "CNPJ da empresa,"        
-    if not empresa_tiporua and empresa_rua:
+    if not empresa_tiporua and not empresa_rua:
         falta += "endereço da empresa,"        
     if not empresa_porta:
         falta += "número da porta da empresa,"        
@@ -90,14 +92,14 @@ def convLead2BU(leaddata:dict, rc_email:str) -> any:
                     "endereco": {
                         "uf": empresa_uf,
                         "cidade": empresa_cidade,
-                        "bairro": "",
+                        "bairro": empresa_bairro,
+                        "tipo_logradouro": empresa_tiporua,
                         "logradouro": empresa_rua,
                         "numero": empresa_porta,
-                        "complemento": "",
+                        "complemento": empresa_complemento,
                         "referencia": "",
-                        "cep": empresa_cep,
+                        #"cep": empresa_cep,
                         "visibilidade": 4,
-                        "tipo_logradouro": empresa_tiporua,
                         "origem": "CRM",
                         "origem_data": now
                     },

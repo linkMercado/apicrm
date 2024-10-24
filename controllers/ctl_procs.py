@@ -1,6 +1,7 @@
 import re
 import csv
 import string
+from typing import Literal
 
 from datetime import date, datetime, timedelta
 from apicrm import LOGGER as logger
@@ -915,6 +916,8 @@ def sync_task(CRM:SuiteCRM.SuiteCRM=None, task_data:dict=dict()) -> str:
     ajusta_dict(task_data, 'linkexterno_c', 'linkexterno')
     ajusta_dict(task_data, 'date_start', 'start_date')
     ajusta_dict(task_data, 'date_due', 'end_date')
+    codigo_projeto = ajusta_dict(task_data, 'codigo_projeto_c', 'codigo_projeto')
+    nome_projeto = ajusta_dict(task_data, 'nome_projeto_c', 'nome_projeto')
 
     if not task_id:
         # marca task como não iniciada
@@ -940,6 +943,27 @@ def sync_task(CRM:SuiteCRM.SuiteCRM=None, task_data:dict=dict()) -> str:
         # ajusta as datas de início e criação da tarefa
         if not task_data.get('date_entered'):
             task_data['date_entered'] = datetime.today()
+
+    # associa a qual o Projeto ?
+    if codigo_projeto:
+        projetos = dal_crm.Project_Get(CRM, {'codigo_projeto_c': codigo_projeto})
+        if len(projetos) == 1:
+            projeto = projetos[0]
+        elif len(projetos) == 0:
+            project_data = dict()
+            project_data['name'] = nome_projeto
+            project_data['codigo_projeto_c'] = codigo_projeto
+            project_data['priority'] = 'Low'
+            project_data['status'] = "In Progress"
+            project_data['estimated_start_date'] = date.today().isoformat()
+            project_data['estimated_end_date'] = (date.today() + timedelta(days=365*5)).isoformat()
+            project_data['assigned_user_id'] = SuiteCRM.API_GEN_UserID
+            projeto = dal_crm.Project_Create(CRM, project_data)
+        else:
+            return f"Foram encontrados {len(projetos)} com o código {codigo_projeto}"
+
+        task_data['parent_type'] == 'Accounts'
+        task_data['parent_id'] = projeto['id']
 
     if task_id:
         s, _ = dal_crm.Task_Update(CRM, task_data)
@@ -1003,14 +1027,14 @@ def sync_boconta(CRM:SuiteCRM.SuiteCRM=None, boaccount_data:dict=dict()) -> str:
 
     # pega os ids do RC e do GC e os grupos de segurança
     New_RC_id, New_GC_id = descobreIDs_byName(CRM, representante_comercial_name, gerente_relacionamento_name)
-    New_sec_grupo = pegaIDs_grupos_seguranca(CRM, False, New_RC_id, New_GC_id)
+    New_sec_grupo = pegaIDs_grupos_seguranca(CRM, True, New_RC_id, New_GC_id)
 
     RC_id = BOAccount['assigned_user_id']
     GC_id = BOAccount.get('user_id_c')
-    sec_grupo = pegaIDs_grupos_seguranca(CRM, False,RC_id, GC_id)
+    sec_grupo = pegaIDs_grupos_seguranca(CRM, True, RC_id, GC_id)
 
     # precisa atualizar o RC ou o GC ?
-    if New_sec_grupo != sec_grupo:
+    if grupo_a_menos_b(New_sec_grupo, sec_grupo) or grupo_a_menos_b(sec_grupo, New_sec_grupo):
         # remove grupos de segurança antigos
         dal_crm.BOAccount_RemoveGrupoSeguranca(CRM, BOAccount['id'], grupos=grupo_a_menos_b(sec_grupo, New_sec_grupo))
 
@@ -1035,8 +1059,8 @@ def sync_boconta(CRM:SuiteCRM.SuiteCRM=None, boaccount_data:dict=dict()) -> str:
                                         )
             # trocou o GC ?
             if New_GC_id != GC_id:
-                GC_sec_grupo_id = pegaIDs_grupos_seguranca(CRM, False, GC_id)
-                New_GC_sec_grupo_id = pegaIDs_grupos_seguranca(CRM, False, New_GC_id)
+                GC_sec_grupo_id = pegaIDs_grupos_seguranca(CRM, True, GC_id)
+                New_GC_sec_grupo_id = pegaIDs_grupos_seguranca(CRM, True, New_GC_id)
 
                 # tratando contatos
                 for contato in dal_crm.Account_GetContacts(CRM, crm_account_id=BU['id']):
@@ -1050,7 +1074,7 @@ def sync_boconta(CRM:SuiteCRM.SuiteCRM=None, boaccount_data:dict=dict()) -> str:
                         dal_crm.Task_Update(CRM, {'id': tarefa['id'], 'assigned_user_id': New_GC_id, 'security_ids': New_GC_sec_grupo_id})
                     else:
                         # coloca a tarefa visível para o newGC e remove a visibilidade do GC anterior
-                        dal_crm.Task_AssociaGruposSeguranca(CRM, tarefa['id'], crm_sec_grup_ids=sec_grupo(New_GC_sec_grupo_id, GC_sec_grupo_id))
+                        dal_crm.Task_AssociaGruposSeguranca(CRM, tarefa['id'], crm_sec_grup_ids=grupo_a_menos_b(New_GC_sec_grupo_id, GC_sec_grupo_id))
                         dal_crm.Task_RemoveGrupoSeguranca(CRM, tarefa['id'], grupos=grupo_a_menos_b(GC_sec_grupo_id, New_GC_sec_grupo_id))
 
                 # tratando ticket
@@ -1076,9 +1100,9 @@ def sync_boconta(CRM:SuiteCRM.SuiteCRM=None, boaccount_data:dict=dict()) -> str:
     elif New_name:
         s, _ = dal_crm.BOAccount_Update(CRM, {'id': BOAccount['id'], 'name': New_name} )
 
-
     return "OK"
-       
+
+
 def get_sync_bu(args:dict=dict()) -> list[dict]:
     # verifica os parametros aceitos
     id = None
@@ -1504,7 +1528,7 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
 
     # pega os ids do RC e do GC e os grupos de segurança
     New_BU_RC_id, New_BU_GC_id = descobreIDs_byName(CRM, representante_comercial_name, gerente_relacionamento_name)
-    New_sec_grupo = pegaIDs_grupos_seguranca(CRM, False, New_BU_RC_id, New_BU_GC_id)
+    New_sec_grupo = pegaIDs_grupos_seguranca(CRM, True, New_BU_RC_id, New_BU_GC_id)
 
     # É para criar o BOAccount ?
     if not BOAccount:
@@ -1529,7 +1553,7 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
     # pega os ids do RC e do GC e os grupos de segurança
     RC_id = BOAccount['assigned_user_id']
     GC_id = BOAccount.get('user_id_c')
-    sec_grupo = pegaIDs_grupos_seguranca(CRM, False, RC_id, GC_id)
+    sec_grupo = pegaIDs_grupos_seguranca(CRM, True, RC_id, GC_id)
     if not New_sec_grupo:
         New_sec_grupo = sec_grupo
     account_data['security_ids'] = New_sec_grupo
@@ -1614,31 +1638,31 @@ def sync_bu(CRM:SuiteCRM.SuiteCRM=None, account_data:dict=dict()) -> str:
     # precisa atualizar o RC ou o GC ?
     if grupos_saintes or grupos_entrantes:
         # remove grupos de segurança antigos
-        dal_crm.BOAccount_RemoveGrupoSeguranca(CRM, BOAccount['id'], grupos=grupo_a_menos_b(sec_grupo, New_sec_grupo))
+        dal_crm.BOAccount_RemoveGrupoSeguranca(CRM, BOAccount['id'], grupos=grupos_saintes)
 
         # atualiza RC e GC do BOAccount           
         s, _ = dal_crm.BOAccount_Update(CRM, {'id': BOAccount['id'], 
                                             'assigned_user_id': New_BU_RC_id, 
                                             'gerente_relacionamento_id': New_BU_GC_id,
-                                            'security_ids': New_sec_grupo,
+                                            'security_ids': grupos_entrantes,
                                             'account_ids': crm_BU['id']} )
 
         # acerta o GC e RC das BUs desse BOAccount
         BUs = dal_crm.BOAccount_GetAccounts(CRM, BOAccount['id'])
         for BU in BUs:
             if BU['id'] != crm_BU['id']:
-                dal_crm.Account_RemoveGrupoSeguranca(CRM, BU['id'], grupos=grupo_a_menos_b(sec_grupo, New_sec_grupo))
+                dal_crm.Account_RemoveGrupoSeguranca(CRM, BU['id'], grupos=grupos_saintes)
                 dal_crm.Account_Update(CRM, { 
                                             'id': BU['id'],
                                             'gerente_relacionamento_id': New_BU_GC_id,
                                             'assigned_user_id': New_BU_RC_id,
-                                            'security_ids': New_sec_grupo
+                                            'security_ids': grupos_entrantes
                                             }
                                         )
             # trocou o GC ?
             if New_BU_GC_id != GC_id:
-                GC_sec_grupo_id = pegaIDs_grupos_seguranca(CRM, False, GC_id)
-                New_GC_sec_grupo_id = pegaIDs_grupos_seguranca(CRM, False, New_BU_GC_id)
+                GC_sec_grupo_id = pegaIDs_grupos_seguranca(CRM, True, GC_id)
+                New_GC_sec_grupo_id = pegaIDs_grupos_seguranca(CRM, True, New_BU_GC_id)
 
                 # tratando contatos
                 for contato in dal_crm.Account_GetContacts(CRM, crm_account_id=BU['id']):
@@ -1796,7 +1820,7 @@ def sync_contact(CRM:SuiteCRM.SuiteCRM=None, contact_data:dict=dict()) -> str:
     # pega os grupos de segurança RC e GC desse account
     RC_id = crm_account.get('assigned_user_id')
     GC_id = crm_account.get('users_accounts_1users_ida')
-    contact_data['security_ids'] = pegaIDs_grupos_seguranca(CRM, False, RC_id, GC_id)
+    contact_data['security_ids'] = pegaIDs_grupos_seguranca(CRM, True, RC_id, GC_id)
 
     # coloca o link com BU
     # contact_data['contact_account_id'] = crm_account.get('id')
@@ -1989,10 +2013,10 @@ def sync_contract(CRM:SuiteCRM.SuiteCRM=None, contract_data:dict=dict()) -> str:
         New_RC_id = RC_id
 
 
-    grupos_sec = pegaIDs_grupos_seguranca(CRM, False, RC_id, GC_id, ER_id)
+    grupos_sec = pegaIDs_grupos_seguranca(CRM, True, RC_id, GC_id, ER_id)
 
     # coloca no contrato os grupos que podem ve-lo
-    New_grupos_sec = pegaIDs_grupos_seguranca(CRM, False, New_RC_id, New_GC_id, New_ER_id)
+    New_grupos_sec = pegaIDs_grupos_seguranca(CRM, True, New_RC_id, New_GC_id, New_ER_id)
     contract_data['security_ids'] = New_grupos_sec
 
     # coloca o id da BOAccount nos dados do contrato
@@ -2004,7 +2028,7 @@ def sync_contract(CRM:SuiteCRM.SuiteCRM=None, contract_data:dict=dict()) -> str:
     # verifica se o contrato existe
     if crm_contrato:
         # remove o grupo antigo
-        if New_grupos_sec != grupos_sec:
+        if grupo_a_menos_b(New_grupos_sec, grupos_sec) or grupo_a_menos_b(grupos_sec, New_grupos_sec):
             dal_crm.Contract_RemoveGrupoSeguranca(CRM, crm_contrato['id'], grupo_a_menos_b(grupos_sec,New_grupos_sec))
 
         # se existe, atualiza as informações
@@ -2023,7 +2047,7 @@ def sync_contract(CRM:SuiteCRM.SuiteCRM=None, contract_data:dict=dict()) -> str:
         # coloca o grupo do especialita na BU Contratante
         dal_crm.Account_AssociaGruposSeguranca(CRM, crm_account_id=ContaContratante['id'], crm_sec_grup_ids=New_grupos_sec)
     else:
-        ER_sec_id = pegaIDs_grupos_seguranca(CRM, False, ER_id)
+        ER_sec_id = pegaIDs_grupos_seguranca(CRM, True, ER_id)
 
         # remove a visualização desse contrato do especialista
         dal_crm.Contract_RemoveGrupoSeguranca(CRM, crm_contrato['id'], grupos=ER_sec_id)
@@ -2334,89 +2358,6 @@ def processa_arquivo_deleta_contratos(file_path:str, skiplines:int=0) -> str:
     return f"arquivo com {row_num-1} registros processado, {qtd_deletados} contratos deletados e {qtd_erros_formatacao} erros de formatação no CSV"
 
 
-def proc_atualiza_grupos_seguranca() -> dict:
-    CRM = SuiteCRM.SuiteCRM(logger)
-    msg = dict()
-    
-    # trata tickets
-    lidos, pulados, atuados, erros = 0, 0, 0, 0
-    tickets = dal_crm.Ticket_Get(CRM, {'grupo_seguranca_gerado_c':'N'})
-    for ticket in tickets:
-        lidos += 1
-        # quem são os GC e RC da BU desse Ticket ?
-        bu_id = ticket.get('account_id')
-        if bu_id:
-            bu = dal_crm.Account_Get(CRM, {'id': bu_id})
-            if bu:
-                RC_id = bu[0].get('assigned_user_id')
-                GC_id = bu[0].get('users_accounts_1users_ida')
-            else:
-                erros += 1
-                dal_crm.Ticket_Update(CRM, {'id': ticket['id'], 'grupo_seguranca_gerado_c':'E'})
-        else:
-            pulados += 1
-            dal_crm.Ticket_Update(CRM, {'id': ticket['id'], 'grupo_seguranca_gerado_c':'X'})
-            continue
-            # o que fazer quando não está associadp a BU ?
-
-        # deixa visível pela hierarquia do 'assigned_to'
-        sec_groups = pegaIDs_grupos_seguranca(CRM, True, ticket['assigned_user_id'], RC_id, GC_id)
-        cur_sec_groups = [gs['id'] for gs in dal_crm.Ticket_GetGruposSeguranca(CRM, ticket['id'])]
-        
-        # remove os indesejáveis
-        dal_crm.Ticket_RemoveGrupoSeguranca(CRM, ticket['id'], grupos=grupo_a_menos_b(cur_sec_groups, sec_groups))
-        # associa
-        dal_crm.Ticket_AssociaGruposSeguranca(CRM, ticket['id'], crm_sec_grup_ids=grupo_a_menos_b(sec_groups, cur_sec_groups))
-        
-        # marca o ticket como tratado (segurança)
-        dal_crm.Ticket_Update(CRM, {'id': ticket['id'], 'grupo_seguranca_gerado_c':'S'})
-        atuados += 1
-    msg['tickets'] = {'lidos': lidos, 'pulados': pulados, 'atuados': atuados, 'erro': erros}
-
-    # trata tarefas
-    tasks = dal_crm.Task_Get(CRM, {'grupo_seguranca_gerado_c':'N'})
-    lidos, pulados, atuados, erros = 0, 0, 0, 0
-    for task in tasks:
-        lidos += 1
-        # quem são os GC e RC da BU desse Ticket ?
-        contract_id = task.get('aos_contracts_id_c')
-        if contract_id:
-            contract = dal_crm.Contract_Get(CRM, {'id': contract_id})
-            if contract:
-                bu_id = contract[0].get("contract_account_id")
-                if bu_id:
-                    bu = dal_crm.Account_Get(CRM, {'id': bu_id})
-                    RC_id = bu[0].get('assigned_user_id')
-                    GC_id = bu[0].get('users_accounts_1users_ida')
-                else:
-                    erros += 1
-                    continue
-            else:
-                erros += 1
-                dal_crm.Task_Update(CRM, {'id': task['id'], 'grupo_seguranca_gerado_c':'E'})
-                continue
-        else:
-            dal_crm.Task_Update(CRM, {'id': task['id'], 'grupo_seguranca_gerado_c':'X'})
-            pulados += 1
-            continue
-            # o que fazer quando não está associado a um contrato ?
-
-        # deixa visível pela hierarquia do 'assigned_to'
-        sec_groups = pegaIDs_grupos_seguranca(CRM, True, task['assigned_user_id'], RC_id, GC_id)
-        cur_sec_groups = [gs['id'] for gs in dal_crm.Task_GetGruposSeguranca(CRM, task  ['id'])]
-        
-        # remove os indesejáveis
-        dal_crm.Task_RemoveGrupoSeguranca(CRM, task['id'], grupos=grupo_a_menos_b(cur_sec_groups, sec_groups))
-        # associa
-        dal_crm.Task_AssociaGruposSeguranca(CRM, task['id'], crm_sec_grup_ids=grupo_a_menos_b(sec_groups, cur_sec_groups))
-        
-        # marca o ticket como tratado (segurança)
-        dal_crm.Task_Update(CRM, {'id': task['id'], 'grupo_seguranca_gerado_c':'S'})
-        atuados += 1
-    msg['tarefas'] = {'lidos': lidos, 'pulados': pulados, 'atuados': atuados, 'erro': erros}
-
-    return str(msg)
-
 def coloca_contatos_nos_BOAccounts():
     CRM = SuiteCRM.SuiteCRM(logger)     
 
@@ -2436,6 +2377,7 @@ def coloca_contatos_nos_BOAccounts():
         if not BUs or len(BUs) == 0:
             print(f"BO {BOAccount_id} sem BU ! ")
 
+
 def associa_BUs_aos_contatos():
     CRM = SuiteCRM.SuiteCRM(logger)     
 
@@ -2448,241 +2390,286 @@ def associa_BUs_aos_contatos():
         for contato in contatos if contatos else []:
             dal_crm.Contact_AssociaAccounts(CRM, crm_contact_id=contato['id'], crm_account_id=bu_id)
 
-def associa_gruposseguranca_aos_contratos():
-    CRM = SuiteCRM.SuiteCRM(logger)     
 
-    # pega as BOAccounts
-    BOAccounts = dal_crm.BOAccounts(CRM)
-    for BOAccount in BOAccounts:
-        print('>', end='')
-        RC_id = BOAccount.get('assigned_user_id')
-        GC_id = BOAccount.get('user_id_c')
-        
-        # pega o grupo
-        grupo1 = pegaIDs_grupos_seguranca(CRM, False, RC_id, GC_id)
-        
-        # pega os contratos dessas BOAccounts
-        contratos = dal_crm.BOAccount_GetContracts(CRM, BOAccount['id'], fulldata=True)
-        for contrato in contratos if contratos else []:
-            print('.', end='')
-            RC_id = contrato.get('assigned_user_id')
-            ER_id = contrato.get('users_aos_contracts_1users_ida')
-            grupo2 = pegaIDs_grupos_seguranca(CRM, False, RC_id, ER_id)
+def lead_ajusta_grupo_seguranca(CRM, lead) -> Literal["atuado","pulado","erro"]:
+    lead_sec_ids = pegaIDs_grupos_seguranca(CRM, True, lead.get('assigned_user_id')).split(',')
+    sec_RC_ids = list() 
+    if (bu_id:=lead.get('account_id')):
+        BU = dal_crm.Account_Get(CRM, {'id':bu_id})
+        if len(BU) == 1:
+            # pega o RC da BU
+            sec_RC_ids = pegaIDs_grupos_seguranca(CRM, True, BU[0].get('assigned_user_id')).split(',')
 
-            # todo
-            print("todo: remover os grupos anteriores")
-            # associa ao contrato
-            dal_crm.Contract_AssociaGruposSeguranca(CRM, crm_contract_id=contrato['id'], crm_sec_grup_ids=f"{grupo1},{grupo2}")
+    grupo_atual = [g['id'] for g in dal_crm.Lead_GetGruposSeguranca(CRM, lead['id'])]
+    grupo_lead = list(set(lead_sec_ids) | set(sec_RC_ids))
 
-            # todo
-            print("todo: remover os grupos anteriores")
+    # remove grupo de segurança que estão 'a mais' (atual - novo)
+    dal_crm.Lead_RemoveGrupoSeguranca(CRM, lead['id'], grupo_a_menos_b(grupo_atual, grupo_lead))
 
-            # associa a BU contratante
-            dal_crm.Account_AssociaGruposSeguranca(CRM, crm_account_id=contrato['contract_account_id'], crm_sec_grup_ids=grupo2)
+    # complementa com os demais (novo - atual)
+    dal_crm.Lead_AssociaGruposSeguranca(CRM, lead['id'], ','.join(list(set(grupo_lead) - set(grupo_atual))))
+    
+    return "atuado"
 
 
-def remove_GC_de_BOAccounts_sem_contrato_ativo():
-    def tem_contrato_ativo(contratos:list) -> bool:
+def oportunidade_ajusta_grupo_seguranca(CRM, oportunidade) -> Literal["atuado","pulado","erro"]:
+    # quem são os GC e RC da BU desse Ticket ?
+    bu_id = oportunidade.get('account_id')
+    if bu_id:
+        if (bu:=dal_crm.Account_Get(CRM, {'id': bu_id})):
+            RC_id = bu[0].get('assigned_user_id')
+            # GC_id = bu[0].get('users_accounts_1users_ida')
+        else:
+            return "erro"
+    else:
+        return "pulado"
+    
+    # deixa visível pela hierarquia do 'assigned_to'
+    sec_groups = pegaIDs_grupos_seguranca(CRM, True, oportunidade['assigned_user_id'], RC_id)
+    cur_sec_groups = [gs['id'] for gs in dal_crm.Opportunity_GetGruposSeguranca(CRM, oportunidade['id'])]
+    
+    # remove os indesejáveis
+    dal_crm.Opportunity_RemoveGrupoSeguranca(CRM, oportunidade['id'], grupos=grupo_a_menos_b(cur_sec_groups, sec_groups))
+    # associa
+    dal_crm.Opportunity_AssociaGruposSeguranca(CRM, oportunidade['id'], crm_sec_grup_ids=grupo_a_menos_b(sec_groups, cur_sec_groups))
+    return "atuado"
+
+
+def ticket_ajusta_grupo_seguranca(CRM, ticket) -> Literal["atuado","pulado","erro"]:
+    # quem são os GC e RC da BU desse Ticket ?
+    bu_id = ticket.get('account_id')
+    if bu_id:
+        if (bu:=dal_crm.Account_Get(CRM, {'id': bu_id})):
+            RC_id = bu[0].get('assigned_user_id')
+            GC_id = bu[0].get('users_accounts_1users_ida')
+        else:
+            return "erro"
+    else:
+        return "pulado"
+    
+    # deixa visível pela hierarquia do 'assigned_to'
+    sec_groups = pegaIDs_grupos_seguranca(CRM, True, ticket['assigned_user_id'], RC_id, GC_id)
+    cur_sec_groups = [gs['id'] for gs in dal_crm.Ticket_GetGruposSeguranca(CRM, ticket['id'])]
+    
+    # remove os indesejáveis
+    dal_crm.Ticket_RemoveGrupoSeguranca(CRM, ticket['id'], grupos=grupo_a_menos_b(cur_sec_groups, sec_groups))
+    # associa
+    dal_crm.Ticket_AssociaGruposSeguranca(CRM, ticket['id'], crm_sec_grup_ids=grupo_a_menos_b(sec_groups, cur_sec_groups))
+    return "atuado"
+
+
+def tarefa_ajusta_grupo_seguranca(CRM, task) -> Literal["atuado","pulado","erro"]:
+    # quem são os GC e RC da BU desse tarefa ?
+    RC_id = None
+    GC_id = None
+    if task['parent_type'] == 'Cases':
+        ticket = dal_crm.Ticket_Get(CRM, filtro={'id': task['parent_id']} )
+        if ticket and len(ticket) == 1:
+            bu_id = ticket[0].get('account_id')
+            if bu_id and (bu:=dal_crm.Account_Get(CRM, {'id': bu_id})):
+                RC_id = bu[0].get('assigned_user_id')
+                GC_id = bu[0].get('users_accounts_1users_ida')
+    elif task['parent_type'] == 'Accounts':
+        bu = dal_crm.Account_Get(CRM, filtro={'id': task['parent_id']})
+        if bu:
+            RC_id = bu[0].get('assigned_user_id')
+            GC_id = bu[0].get('users_accounts_1users_ida')
+    elif task['parent_type'] == 'Project':
+        return "pulado"
+    elif task['parent_type'] == 'AOS_Contracts':
+        return "pulado"
+    elif task['parent_type'] == 'Tasks':
+        return "pulado"
+    else:
+        logger.debug(f"task:{task['id']}, parent_type:{task['parent_type']}")
+        # quem são os GC e RC da BU desse tarefa ?
+        contract_id = task.get('aos_contracts_id_c')
+        if contract_id:
+            contract = dal_crm.Contract_Get(CRM, {'id': contract_id})
+            if contract and (bu_id:=contract[0].get("contract_account_id")):
+                if (bu:=dal_crm.Account_Get(CRM, {'id': bu_id})):
+                    RC_id = bu[0].get('assigned_user_id')
+                    GC_id = bu[0].get('users_accounts_1users_ida')
+        else:
+            # o que fazer quando não está associado a um contrato ?
+            return "pulado"
+    
+    #achou o RC e o GC ?
+    if not (RC_id and GC_id):
+        return "erro"
+
+    # deixa visível pela hierarquia do 'assigned_to'
+    sec_groups = pegaIDs_grupos_seguranca(CRM, True, task['assigned_user_id'], RC_id, GC_id)
+    cur_sec_groups = [gs['id'] for gs in dal_crm.Task_GetGruposSeguranca(CRM, task['id'])]
+    
+    # remove os indesejáveis
+    dal_crm.Task_RemoveGrupoSeguranca(CRM, task['id'], grupos=grupo_a_menos_b(cur_sec_groups, sec_groups))
+    # associa
+    dal_crm.Task_AssociaGruposSeguranca(CRM, task['id'], crm_sec_grup_ids=grupo_a_menos_b(sec_groups, cur_sec_groups))
+    
+    return "atuado"
+
+
+def contato_ajusta_grupo_seguranca(CRM, contato) -> Literal["atuado","pulado","erro"]:
+    BUs = dal_crm.Contact_GetAccounts(CRM, contato['id'])
+    super_grupo = list()
+    for BU in BUs:
+        sec_bu = [g['id'] for g in dal_crm.Account_GetGruposSeguranca(CRM, BU['id'])]
+        super_grupo = list(set(super_grupo) | set(sec_bu))
+    grupo_atual = [g['id'] for g in dal_crm.Contact_GetGruposSeguranca(CRM, contato['id'])]
+
+    # remove grupo de segurança que estão 'a mais' (atual - novo)
+    dal_crm.Contact_RemoveGrupoSeguranca(CRM, contato['id'], grupo_a_menos_b(grupo_atual, super_grupo))
+    # complementa com os demais (novo - atual)
+    dal_crm.Contact_AssociaGruposSeguranca(CRM, contato['id'], ','.join(list(set(super_grupo) - set(grupo_atual))))
+    return "atuado"
+
+
+def contaBO_ajusta_grupo_seguranca(CRM, BOAccount) -> Literal["atuado","pulado","erro"]:
+    master_RC_sec_ids = pegaIDs_grupos_seguranca(CRM, True, BOAccount.get('assigned_user_id'))
+    master_GC_sec_ids = pegaIDs_grupos_seguranca(CRM, True, BOAccount.get('user_id_c'))
+    master_gsec_RC_id = ""
+
+    # pega as BUs dessa ContaBO
+    BUs = dal_crm.BOAccount_GetAccounts(CRM, BOAccount['id'], fulldata=True)
+    for BU in BUs:
+        print('B', end='')
+
+        # o BOAccount está sem GC ?
+        GC_id = BU.get('users_accounts_1users_ida')
+        if master_GC_sec_ids == '':
+            if GC_id:
+                # coloca o GC no BOAccount
+                master_GC_sec_ids = pegaIDs_grupos_seguranca(CRM, True, GC_id)
+                dal_crm.BOAccount_Update(CRM, {'id': BOAccount['id'], 'user_id_c': GC_id, 'security_ids': master_GC_sec_ids})
+            else:
+                print()
+                print(f"BOConta Sem GC, id_conta_lm:{BOAccount.get('id_conta_lm')}")
+                return "erro"
+
+        # pega os contratos dessa BU
+        lista_gsec_RC_id = ""
+        contratos = dal_crm.Account_GetContracts(CRM, BU['id'], fulldata=True)
         for contrato in contratos:
+            print('R', end='')
+            New_sec_RC_ids = pegaIDs_grupos_seguranca(CRM, True, contrato.get('assigned_user_id'))
             if contrato.get('status_contrato_c','').upper() == 'ATIVO':
-                return True
-        return False
+                lista_gsec_RC_id += f"{New_sec_RC_ids},"    
+                New_sec_ER_ids = pegaIDs_grupos_seguranca(CRM, True, contrato.get('users_aos_contracts_1users_ida'))
+            else:
+                New_sec_ER_ids = ""
 
-    CRM = SuiteCRM.SuiteCRM(logger)     
+            # acerta grupo de segurança da Contratos
+            super_grupo = list(set([s for s in f"{master_RC_sec_ids},{master_GC_sec_ids},{New_sec_RC_ids},{New_sec_ER_ids}".split(',') if s]))
+            grupo_atual = [g['id'] for g in dal_crm.Contract_GetGruposSeguranca(CRM, contrato['id'])]
+            # remove grupo de segurança que estão 'a mais' (atual - novo)
+            dal_crm.Contract_RemoveGrupoSeguranca(CRM, contrato['id'], grupo_a_menos_b(grupo_atual, super_grupo))
+            # complementa com os demais (novo - atual)
+            dal_crm.Contract_AssociaGruposSeguranca(CRM, contrato['id'], grupo_a_menos_b(super_grupo, grupo_atual))
 
-    # pega as BOAccounts
-    BOAccounts = dal_crm.BOAccounts(CRM)
-    for BOAccount in BOAccounts:
-        print('>', end='')
-        # pega os contratos dessas BOAccounts
-        contratos = dal_crm.BOAccount_GetContracts(CRM, BOAccount['id'], fulldata=True)
-        if not tem_contrato_ativo(contratos):
-            print('.', end='')
-            if (GC_id:=BOAccount['user_id_c']):
-                grupo_sec = pegaIDs_grupos_seguranca(CRM, False, GC_id)
-                
-                # remove o GC do BOAccount
-                #s, _ = dal_crm.BOAccount_Update(CRM, {'id': BOAccount['id'], 'user_id_c': ''})
-                s, _ = dal_crm.BOAccount_Update(CRM, {'id': BOAccount['id'], 'gerente_relacionamento_id': ''})
-                if s:
-                    print(f"Problemas para atualizar BOAccount:{BOAccount['id']}")
+        # acerta grupo de segurança da BU
+        super_grupo = list(set([s for s in f"{master_RC_sec_ids},{master_GC_sec_ids},{lista_gsec_RC_id}".split(',') if s]))
+        grupo_atual = [g['id'] for g in dal_crm.Account_GetGruposSeguranca(CRM, BU['id'])]
+        # remove grupo de segurança que estão 'a mais' (atual - novo)
+        dal_crm.Account_RemoveGrupoSeguranca(CRM, BU['id'], grupo_a_menos_b(grupo_atual, super_grupo))
+        # complementa com os demais (novo - atual)
+        dal_crm.Account_AssociaGruposSeguranca(CRM, BU['id'], ','.join(list(set(super_grupo) - set(grupo_atual))))
 
-                # remove o grupo sec GC do BOAccount
-                if grupo_sec:
-                    dal_crm.BOAccount_RemoveGrupoSeguranca(CRM, BOAccount['id'], grupo_sec)
-                    for contrato in contratos:
-                        # remove o grupo sec GC do contrato
-                        dal_crm.Contract_RemoveGrupoSeguranca(CRM, contrato['id'], grupo_sec)
+    # acerta grupo de segurança do BOConta
+    super_grupo = list(set([s for s in f"{master_RC_sec_ids},{master_GC_sec_ids},{master_gsec_RC_id}".split(',') if s]))
+    grupo_atual = [g['id'] for g in dal_crm.BOAccount_GetGruposSeguranca(CRM, BOAccount['id'])]
+    # remove grupo de segurança que estão 'a mais' (atual - novo)
+    dal_crm.BOAccount_RemoveGrupoSeguranca(CRM, BOAccount['id'], grupo_a_menos_b(grupo_atual, super_grupo))
+    # complementa com os demais (novo - atual)
+    dal_crm.BOAccount_AssociaGruposSeguranca(CRM, BOAccount['id'], ','.join(list(set(super_grupo) - set(grupo_atual))))
 
-                for BU in dal_crm.BOAccount_GetAccounts(CRM, BOAccount['id']):
-                    # remove o GC da BU
-                    #dal_crm.Account_Update(CRM, {'id': BU['id'], 'users_accounts_1users_ida': ''})
-                    s, _ = dal_crm.Account_Update(CRM, {'id': BU['id'], 'gerente_relacionamento_id': ''})
-                    # remove o grupo sec GC do contrato
-                    if grupo_sec:
-                        dal_crm.Account_RemoveGrupoSeguranca(CRM, BU['id'], grupo_sec)
+    return "atuado"
 
 
 def acerta_grupos_de_seguranca(modulos:str):
+    def atlz_contadores(r:str) -> None:
+        if r == "atuado":
+            nonlocal atuados
+            atuados +=1
+        elif r == "pulado":
+            nonlocal pulados
+            pulados +=1
+        elif r == "erro":
+            nonlocal erros
+            erros += 1
+
     CRM = SuiteCRM.SuiteCRM(logger)     
     msg = dict()
-    SEC_BU = dict()
-
     if "CONTABACKOFFICE" in modulos.upper():
-        # pega as BOAccounts
+        print("Conta BO: ", end="")
+        pulados, atuados, erros = 0, 0, 0
         BOAccounts = dal_crm.BOAccounts(CRM)
         #BOAccounts = dal_crm.BOAccount_Get(CRM, {'id':"3acdd08d-3480-a480-9873-666a120e885a"})
         for BOAccount in BOAccounts:
-            print('K', end='')
-            master_RC_sec_ids = pegaIDs_grupos_seguranca(CRM, True, BOAccount.get('assigned_user_id'))
-            master_GC_sec_ids = pegaIDs_grupos_seguranca(CRM, True, BOAccount.get('user_id_c'))
-            master_gsec_RC_id = ""
-        
-            # pega as BUs dessa ContaBO
-            BUs = dal_crm.BOAccount_GetAccounts(CRM, BOAccount['id'], fulldata=True)
-            for BU in BUs:
-                print('B', end='')
-
-                # o BOAccount está sem GC ?
-                GC_id = BU.get('users_accounts_1users_ida')
-                if master_GC_sec_ids == '':
-                    if GC_id:
-                        # coloca o GC no BOAccount
-                        master_GC_sec_ids = pegaIDs_grupos_seguranca(CRM, True, GC_id)
-                        dal_crm.BOAccount_Update(CRM, {'id': BOAccount['id'], 'user_id_c': GC_id, 'security_ids': master_GC_sec_ids})
-                    else:
-                        print()
-                        print(f"BOConta Sem GC, id_conta_lm:{BOAccount.get('id_conta_lm')}")
-
-                # pega os contratos dessa BU
-                lista_gsec_RC_id = ""
-                contratos = dal_crm.Account_GetContracts(CRM, BU['id'], fulldata=True)
-                for contrato in contratos:
-                    print('C', end='')
-                    New_sec_RC_ids = pegaIDs_grupos_seguranca(CRM, True, contrato.get('assigned_user_id'))
-                    if contrato.get('status_contrato_c','').upper() == 'ATIVO':
-                        lista_gsec_RC_id += f"{New_sec_RC_ids},"    
-                        New_sec_ER_ids = pegaIDs_grupos_seguranca(CRM, True, contrato.get('users_aos_contracts_1users_ida'))
-                    else:
-                        New_sec_ER_ids = ""
-
-                    # acerta grupo de segurança da Contratos
-                    super_grupo = list(set([s for s in f"{master_RC_sec_ids},{master_GC_sec_ids},{New_sec_RC_ids},{New_sec_ER_ids}".split(',') if s]))
-                    grupo_atual = [g['id'] for g in dal_crm.Contract_GetGruposSeguranca(CRM, contrato['id'])]
-                    # remove grupo de segurança que estão 'a mais' (atual - novo)
-                    dal_crm.Contract_RemoveGrupoSeguranca(CRM, contrato['id'], grupo_a_menos_b(grupo_atual, super_grupo))
-                    # complementa com os demais (novo - atual)
-                    dal_crm.Contract_AssociaGruposSeguranca(CRM, contrato['id'], grupo_a_menos_b(super_grupo, grupo_atual))
-
-                # acerta grupo de segurança da BU
-                super_grupo = list(set([s for s in f"{master_RC_sec_ids},{master_GC_sec_ids},{lista_gsec_RC_id}".split(',') if s]))
-                grupo_atual = [g['id'] for g in dal_crm.Account_GetGruposSeguranca(CRM, BU['id'])]
-                # remove grupo de segurança que estão 'a mais' (atual - novo)
-                dal_crm.Account_RemoveGrupoSeguranca(CRM, BU['id'], grupo_a_menos_b(grupo_atual, super_grupo))
-                # complementa com os demais (novo - atual)
-                dal_crm.Account_AssociaGruposSeguranca(CRM, BU['id'], ','.join(list(set(super_grupo) - set(grupo_atual))))
-                SEC_BU[BU['id']] = super_grupo
-
-            # acerta grupo de segurança do BOConta
-            super_grupo = list(set([s for s in f"{master_RC_sec_ids},{master_GC_sec_ids},{master_gsec_RC_id}".split(',') if s]))
-            grupo_atual = [g['id'] for g in dal_crm.BOAccount_GetGruposSeguranca(CRM, BOAccount['id'])]
-            # remove grupo de segurança que estão 'a mais' (atual - novo)
-            dal_crm.BOAccount_RemoveGrupoSeguranca(CRM, BOAccount['id'], grupo_a_menos_b(grupo_atual, super_grupo))
-            # complementa com os demais (novo - atual)
-            dal_crm.BOAccount_AssociaGruposSeguranca(CRM, BOAccount['id'], ','.join(list(set(super_grupo) - set(grupo_atual))))
-
+            print('.', end="")
+            atlz_contadores(contaBO_ajusta_grupo_seguranca(CRM, BOAccount))
+        print()
+        msg['ContasBO'] = {'lidos': len(BOAccounts), 'pulados': pulados, 'atuados': atuados, 'erro': erros}
+        logger.debug(str(msg))
 
     if "CONTATO" in modulos.upper():
-        Contatos = dal_crm.Contacts(CRM)
+        print("Contato: ", end="")
+        pulados, atuados, erros = 0, 0, 0
+        contatos = dal_crm.Contacts(CRM)
         #Contatos = dal_crm.Contact_Get(CRM, {'id':'a6e704ff-e5d0-ccff-4d81-66ed6a2312c0'})
-        for Contato in Contatos:
-            BUs = dal_crm.Contact_GetAccounts(CRM, Contato['id'])
-            super_grupo = list()
-            for BU in BUs:
-                super_grupo = list(set(super_grupo) | set(SEC_BU[BU['id']]))
-            grupo_atual = [g['id'] for g in dal_crm.Contact_GetGruposSeguranca(CRM, Contato['id'])]
-            # remove grupo de segurança que estão 'a mais' (atual - novo)
-            dal_crm.Contact_RemoveGrupoSeguranca(CRM, Contato['id'], grupo_a_menos_b(grupo_atual, super_grupo))
-            # complementa com os demais (novo - atual)
-            dal_crm.Contact_AssociaGruposSeguranca(CRM, Contato['id'], ','.join(list(set(super_grupo) - set(grupo_atual))))
+        for contato in contatos:
+            print('.', end="")
+            atlz_contadores(contato_ajusta_grupo_seguranca(CRM, contato))
+        print()
+        msg['contatos'] = {'lidos': len(contatos), 'pulados': pulados, 'atuados': atuados, 'erro': erros}
+        logger.debug(str(msg))
 
     if "LEAD" in modulos.upper():
-        # pega os Leads
-        Leads = dal_crm.Leads(CRM)
+        print("Lead: ", end="")
+        pulados, atuados, erros = 0, 0, 0
         #Leads = dal_crm.Lead_Get(CRM, {'id':'8740087e-586f-6526-187d-66e86b525b7f'})
+        Leads = dal_crm.Leads(CRM)
         for Lead in Leads:
-            lead_sec_ids = pegaIDs_grupos_seguranca(CRM, True, Lead.get('assigned_user_id')).split(',')
-            sec_RC_ids = list() 
-            if (bu_id:=Lead.get('account_id')):
-                BU = dal_crm.Account_Get(CRM, {'id':bu_id})
-                if len(BU) == 1:
-                    # pega o RC da BU
-                    sec_RC_ids = pegaIDs_grupos_seguranca(CRM, True, BU[0].get('assigned_user_id')).split(',')
-            grupo_atual = [g['id'] for g in dal_crm.Lead_GetGruposSeguranca(CRM, Lead['id'])]
-            grupo_lead = list(set(lead_sec_ids) | set(sec_RC_ids))
-            # remove grupo de segurança que estão 'a mais' (atual - novo)
-            dal_crm.Lead_RemoveGrupoSeguranca(CRM, Lead['id'], grupo_a_menos_b(grupo_atual, grupo_lead))
-            # complementa com os demais (novo - atual)
-            dal_crm.Lead_AssociaGruposSeguranca(CRM, Lead['id'], ','.join(list(set(grupo_lead) - set(grupo_atual))))
+            print('.',end="")
+            atlz_contadores(lead_ajusta_grupo_seguranca(CRM, Lead))
+        print()
+        msg['leads'] = {'lidos': len(Leads), 'pulados': pulados, 'atuados': atuados, 'erro': erros}
+        logger.debug(str(msg))
 
     if "TICKET" in modulos.upper():
-        Tickets = dal_crm.Tickets(CRM)
+        print("Ticket: ", end="")
+        pulados, atuados, erros = 0, 0, 0
+        tickets = dal_crm.Tickets(CRM)
+        for ticket in tickets:
+            print('.', end=" ")
+            atlz_contadores(ticket_ajusta_grupo_seguranca(CRM, ticket))
+        print()
+        msg['tickets'] = {'lidos': len(tickets), 'pulados': pulados, 'atuados': atuados, 'erro': erros}
+        logger.debug(str(msg))
 
     if "TAREFA" in modulos.upper():
+        print("Tarefa ", end="")
         tasks = dal_crm.Tasks(CRM)
-        lidos, pulados, atuados, erros = 0, 0, 0, 0
+        pulados, atuados, erros = 0, 0, 0
         for task in tasks:
-            lidos += 1
-            # quem são os GC e RC da BU desse tarefa ?
-            RC_id = None
-            GC_id = None
-            if task['parent_type'] == 'Cases':
-                ticket = dal_crm.Ticket_Get(CRM, filtro={'id': task['parent_id']} )
-                if ticket and len(ticket) == 1:
-                    bu_id = ticket[0].get('account_id')
-                    if bu_id:
-                        bu = dal_crm.Account_Get(CRM, {'id': bu_id})
-                        if bu:
-                            RC_id = bu[0].get('assigned_user_id')
-                            GC_id = bu[0].get('users_accounts_1users_ida')
-            elif task['parent_type'] == 'Accounts':
-                bu = dal_crm.Account_Get(CRM, filtro={'id': task['parent_id']})
-                if bu:
-                    RC_id = bu[0].get('assigned_user_id')
-                    GC_id = bu[0].get('users_accounts_1users_ida')
-            else:    
-                # quem são os GC e RC da BU desse tarefa ?
-                contract_id = task.get('aos_contracts_id_c')
-                if contract_id:
-                    contract = dal_crm.Contract_Get(CRM, {'id': contract_id})
-                    if contract:
-                        bu_id = contract[0].get("contract_account_id")
-                        if bu_id:
-                            bu = dal_crm.Account_Get(CRM, {'id': bu_id})
-                            RC_id = bu[0].get('assigned_user_id')
-                            GC_id = bu[0].get('users_accounts_1users_ida')
-                else:
-                    pulados += 1
-                    continue
-                    # o que fazer quando não está associado a um contrato ?
-            
-            #achou o RC e o GC ?
-            if not (RC_id and GC_id):
-                erro += 1
-                continue
+            print('.', end="")
+            atlz_contadores(tarefa_ajusta_grupo_seguranca(CRM, task))
+        print()
+        msg['tarefas'] = {'lidos': len(tasks), 'pulados': pulados, 'atuados': atuados, 'erro': erros}
+        logger.debug(str(msg))
 
-            # deixa visível pela hierarquia do 'assigned_to'
-            sec_groups = pegaIDs_grupos_seguranca(CRM, True, task['assigned_user_id'], RC_id, GC_id)
-            cur_sec_groups = [gs['id'] for gs in dal_crm.Task_GetGruposSeguranca(CRM, task  ['id'])]
-            
-            # remove os indesejáveis
-            dal_crm.Task_RemoveGrupoSeguranca(CRM, task['id'], grupos=grupo_a_menos_b(cur_sec_groups, sec_groups))
-            # associa
-            dal_crm.Task_AssociaGruposSeguranca(CRM, task['id'], crm_sec_grup_ids=grupo_a_menos_b(sec_groups, cur_sec_groups))
-            
-            atuados += 1
-        msg['tarefas'] = {'lidos': lidos, 'pulados': pulados, 'atuados': atuados, 'erro': erros}
+    if "OPORTUNIDADE" in modulos.upper():
+        print("Oportunidade ", end="")
+        oportunidades = dal_crm.Opportunities(CRM)
+        pulados, atuados, erros = 0, 0, 0
+        for oportunidade in oportunidades:
+            print('.', end="")
+            atlz_contadores(oportunidade_ajusta_grupo_seguranca(CRM, oportunidade))
+        print()
+        msg['oportunidades'] = {'lidos': len(oportunidades), 'pulados': pulados, 'atuados': atuados, 'erro': erros}
+        logger.debug(str(msg))
 
+    logger.info(str(msg))
     return str(msg)
 
 
@@ -2700,6 +2687,60 @@ def testa_nomes_grupos_de_seguranca():
                 print("*****")
     print("** FIM **")        
 
-# acerta_grupos_de_seguranca()
 
-#testa_nomes_grupos_de_seguranca()
+def proc_atualiza_grupos_seguranca() -> dict:
+    CRM = SuiteCRM.SuiteCRM(logger)
+    msg = dict()
+    
+    # trata tickets
+    lidos, pulados, atuados, erros = 0, 0, 0, 0
+    tickets = dal_crm.Ticket_Get(CRM, {'grupo_seguranca_gerado_c':'N'})
+    for ticket in tickets:
+        lidos += 1
+        resultado = ticket_ajusta_grupo_seguranca(CRM, ticket)
+        if resultado == "atuado":
+            atuados += 1
+            dal_crm.Ticket_Update(CRM, {'id': ticket['id'], 'grupo_seguranca_gerado_c':'S'})
+        elif resultado == "erro":
+            erros += 1
+            dal_crm.Ticket_Update(CRM, {'id': ticket['id'], 'grupo_seguranca_gerado_c':'E'})
+        elif resultado == "pulado":
+            pulados += 1
+            dal_crm.Ticket_Update(CRM, {'id': ticket['id'], 'grupo_seguranca_gerado_c':'X'})
+    msg['tickets'] = {'lidos': lidos, 'pulados': pulados, 'atuados': atuados, 'erro': erros}
+
+    # trata tarefas
+    tasks = dal_crm.Task_Get(CRM, {'grupo_seguranca_gerado_c':'N'})
+    lidos, pulados, atuados, erros = 0, 0, 0, 0
+    for task in tasks:
+        lidos += 1
+        resultado = tarefa_ajusta_grupo_seguranca(CRM, task)
+        if resultado == "atuado":
+            atuados += 1
+            dal_crm.Task_Update(CRM, {'id': task['id'], 'grupo_seguranca_gerado_c':'S'})
+        elif resultado == "erro":
+            erros += 1
+            dal_crm.Task_Update(CRM, {'id': task['id'], 'grupo_seguranca_gerado_c':'E'})
+        elif resultado == "pulado":
+            pulados += 1
+            dal_crm.Task_Update(CRM, {'id': task['id'], 'grupo_seguranca_gerado_c':'X'})
+    msg['tarefas'] = {'lidos': lidos, 'pulados': pulados, 'atuados': atuados, 'erro': erros}
+
+    # trata oportunidades
+    opportunities = dal_crm.Opportunity_Get(CRM, {'grupo_seguranca_gerado_c':'N'})
+    lidos, pulados, atuados, erros = 0, 0, 0, 0
+    for opportunity in opportunities:
+        lidos += 1
+        resultado = oportunidade_ajusta_grupo_seguranca(CRM, opportunity)
+        if resultado == "atuado":
+            atuados += 1
+            dal_crm.Opportunity_Update(CRM, {'id': opportunity['id'], 'grupo_seguranca_gerado_c':'S'})
+        elif resultado == "erro":
+            erros += 1
+            dal_crm.Opportunity_Update(CRM, {'id': opportunity['id'], 'grupo_seguranca_gerado_c':'E'})
+        elif resultado == "pulado":
+            pulados += 1
+            dal_crm.Opportunity_Update(CRM, {'id': opportunity['id'], 'grupo_seguranca_gerado_c':'X'})
+    msg['oportunidade'] = {'lidos': lidos, 'pulados': pulados, 'atuados': atuados, 'erro': erros}
+
+    return str(msg)

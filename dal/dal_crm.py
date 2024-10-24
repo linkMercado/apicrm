@@ -114,8 +114,8 @@ def Account_AssociaGruposSeguranca(CRM:SuiteCRM.SuiteCRM, crm_account_id:str, cr
     CRM.AssociateData("accounts", base_record_id=crm_account_id, relate_module="security-groups", relate_record_ids=crm_sec_grup_ids)
 
 
-def Account_GetGruposSeguranca(CRM:SuiteCRM.SuiteCRM, crm_contract_id:str) -> list[dict]:
-    grupos_sec = CRM.GetSubPanelData(parentModule="accounts", parentId=crm_contract_id, module="security-groups", subpanel="securitygroups")
+def Account_GetGruposSeguranca(CRM:SuiteCRM.SuiteCRM, account_id:str) -> list[dict]:
+    grupos_sec = CRM.GetSubPanelData(parentModule="accounts", parentId=account_id, module="security-groups", subpanel="securitygroups")
     return grupos_sec if grupos_sec else list()
 
 
@@ -368,7 +368,7 @@ def Contract_RemoveGrupoSeguranca(CRM:SuiteCRM.SuiteCRM, crm_contract_id:str, gr
 
 
 def Tickets(CRM:SuiteCRM.SuiteCRM) -> list[dict]:
-    return CRM.GetData("tickets")
+    return CRM.GetData("cases")
 
 
 def Ticket_Create(CRM:SuiteCRM.SuiteCRM, ticket_data:dict) -> tuple[str,dict]:
@@ -407,6 +407,49 @@ def Ticket_RemoveGrupoSeguranca(CRM:SuiteCRM.SuiteCRM, crm_ticket_id:str, grupos
 
 def Ticket_GetGruposSeguranca(CRM:SuiteCRM.SuiteCRM, crm_ticket_id:str) -> list[dict]:
     grupos_sec = CRM.GetSubPanelData(parentModule="cases", parentId=crm_ticket_id, module="security-groups", subpanel="securitygroups")
+    return grupos_sec if grupos_sec else list()
+
+
+def Opportunities(CRM:SuiteCRM.SuiteCRM) -> list[dict]:
+    return CRM.GetData("opportunities")
+
+
+def Opportunity_Create(CRM:SuiteCRM.SuiteCRM, opportunity_data:dict) -> tuple[str,dict]:
+    if opportunity_data:
+        return CRM.PostData("opportunities", parametros=opportunity_data)
+    else:
+        return "Sem informação", None
+
+
+def Opportunity_Get(CRM:SuiteCRM.SuiteCRM, filtro:dict) -> list[dict]:
+    if filtro:
+        return CRM.GetData("opportunities", filtro=filtro)
+    else:
+        return list()
+
+
+def Opportunity_Update(CRM:SuiteCRM.SuiteCRM, opportunity_data:dict) -> tuple[str,dict]:
+    if opportunity_data:
+        s, d = CRM.PutData("opportunities", parametros=opportunity_data)
+        if s:
+            logger.critical(f"Oportunidade não foi atualizado. erro:{s}, dados:{opportunity_data}")
+        else:
+            logger.info(f"Oportunidade foi atualizada. dados:{opportunity_data}")
+        return s, d
+    else:
+        return "Sem informação", None
+
+
+def Opportunity_AssociaGruposSeguranca(CRM:SuiteCRM.SuiteCRM, crm_opportunity_id:str, crm_sec_grup_ids:str) -> None:
+    CRM.AssociateData("opportunities", base_record_id=crm_opportunity_id, relate_module="security-groups", relate_record_ids=crm_sec_grup_ids)
+
+
+def Opportunity_RemoveGrupoSeguranca(CRM:SuiteCRM.SuiteCRM, crm_opportunity_id:str, grupos:str) -> None:
+    CRM.Desassocia(base_module="opportunities", base_record_id=crm_opportunity_id, relate_module="security-groups", relate_record_ids=grupos)
+
+
+def Opportunity_GetGruposSeguranca(CRM:SuiteCRM.SuiteCRM, crm_opportunity_id:str) -> list[dict]:
+    grupos_sec = CRM.GetSubPanelData(parentModule="opportunities", parentId=crm_opportunity_id, module="security-groups", subpanel="securitygroups")
     return grupos_sec if grupos_sec else list()
 
 

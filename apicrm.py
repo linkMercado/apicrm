@@ -67,8 +67,6 @@ def app_procedures(procedure):
         msg = ctl_procs.proc_atualiza_grupos_seguranca()
     elif procedure == 'acerta_grupos_de_seguranca':
         msg = ctl_procs.acerta_grupos_de_seguranca(**args)
-    elif procedure == 'acerta_GC':
-        msg = ctl_procs.remove_GC_de_BOAccounts_sem_contrato_ativo()
     else:
         msg = f"Processo {procedure} não encontrado"
         status = 404
